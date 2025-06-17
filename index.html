@@ -2,12 +2,18 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Breakout Game</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        html, body {
+            height: 100%;
+            width: 100%;
+            overflow: hidden; /* Previne o scroll da página */
+            touch-action: none; /* Desabilita gestos de toque padrão */
+        }
         body {
             font-family: 'Press Start 2P', cursive;
             background-color: #1a202c;
@@ -15,20 +21,27 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
             margin: 0;
             text-align: center;
+        }
+        #game-wrapper {
+            width: 100%;
+            max-width: 600px; /* Limite máximo para telas grandes */
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
         canvas {
             background: #000;
             display: block;
-            margin: 0 auto;
+            width: 100%; /* Ocupa a largura do container */
             border-radius: 8px;
             box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
         }
         #gameInfo {
-            width: 480px;
-            margin: 1rem auto;
+            width: 100%;
+            margin-bottom: 1rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -67,12 +80,12 @@
 </head>
 <body>
 
-<div id="game-container">
-    <h1 class="text-4xl mb-4 text-blue-300">Breakout</h1>
+<div id="game-wrapper">
+    <h1 class="text-3xl md:text-4xl mb-2 text-blue-300">Breakout</h1>
     <div id="gameInfo">
         <span>PONTOS: <span id="score">0</span></span>
     </div>
-    <canvas id="gameCanvas" width="480" height="320"></canvas>
+    <canvas id="gameCanvas"></canvas>
     <div id="message-container" class="hidden">
         <h2 id="message-text" class="text-3xl mb-2"></h2>
         <button id="play-again-button">Jogar Novamente</button>
@@ -91,9 +104,7 @@
     const playAgainButton = document.getElementById('play-again-button');
     
     // --- Configuração de Som ---
-    // Usar PolySynth para permitir que vários sons toquem simultaneamente sem conflito.
     const synth = new Tone.PolySynth(Tone.Synth).toDestination();
-    // Reduzir um pouco o volume para evitar distorção quando os sons se sobrepõem.
     synth.volume.value = -6; 
     const brickHitSound = () => synth.triggerAttackRelease("C5", "8n");
     const wallHitSound = () => synth.triggerAttackRelease("G4", "8n");
@@ -101,32 +112,19 @@
     const winSound = () => synth.triggerAttackRelease("G5", "2n");
     let audioStarted = false;
 
-    // --- Variáveis do Jogo ---
+    // --- Variáveis Globais do Jogo ---
     let animationFrameId;
     let score = 0;
+    const baseWidth = 480; // Largura original para cálculo de escala
+    const baseHeight = 320;
+    let scale = 1;
 
-    // --- Propriedades da Bola ---
-    const ballRadius = 8;
-    let x = canvas.width / 2;
-    let y = canvas.height - 30;
-    let dx = 3;
-    let dy = -3;
-
-    // --- Propriedades da Raquete ---
-    const paddleHeight = 10;
-    const paddleWidth = 75;
-    let paddleX = (canvas.width - paddleWidth) / 2;
-
-    // --- Propriedades dos Blocos ---
-    const brickRowCount = 5;
-    const brickColumnCount = 7;
-    const brickWidth = 55;
-    const brickHeight = 15;
-    const brickPadding = 5;
-    const brickOffsetTop = 30;
-    const brickOffsetLeft = 30;
-    const brickColors = ["#ef4444", "#f97316", "#eab308", "#84cc16", "#22c55e"];
+    // --- Propriedades do Jogo (serão escaladas) ---
+    let ballRadius, x, y, dx, dy;
+    let paddleHeight, paddleWidth, paddleX;
+    let brickRowCount, brickColumnCount, brickWidth, brickHeight, brickPadding, brickOffsetTop, brickOffsetLeft;
     
+    const brickColors = ["#ef4444", "#f97316", "#eab308", "#84cc16", "#22c55e"];
     let bricks = [];
 
     // --- Funções de Desenho ---
@@ -215,7 +213,7 @@
             wallHitSound();
         } else if (y + dy > canvas.height - ballRadius) {
             if (x > paddleX && x < paddleX + paddleWidth) {
-                dy = -dy * 1.02;
+                dy = -dy;
                 wallHitSound();
             } else {
                 showEndGameMessage("FIM DE JOGO");
@@ -230,22 +228,32 @@
     }
     
     // --- Controles e Eventos ---
-    function mouseMoveHandler(e) {
+    function handleMove(e) {
         if (!audioStarted) {
-            // O áudio precisa ser iniciado por um gesto do usuário
             Tone.start();
             audioStarted = true;
-            console.log("Audio context started!");
         }
-        const relativeX = e.clientX - canvas.getBoundingClientRect().left;
+        const rect = canvas.getBoundingClientRect();
+        let clientX = e.clientX;
+        // Usa o primeiro toque se for um evento de toque
+        if (e.touches && e.touches.length > 0) {
+            clientX = e.touches[0].clientX;
+        }
+        const relativeX = clientX - rect.left;
         if (relativeX > 0 && relativeX < canvas.width) {
             paddleX = relativeX - paddleWidth / 2;
         }
     }
 
-    document.addEventListener('mousemove', mouseMoveHandler, false);
-    playAgainButton.addEventListener('click', resetGame);
+    document.addEventListener('mousemove', handleMove, false);
+    document.addEventListener('touchmove', (e) => {
+        e.preventDefault(); // Previne o scroll ao tocar na tela
+        handleMove(e);
+    }, { passive: false });
     
+    playAgainButton.addEventListener('click', fullReset);
+    window.addEventListener('resize', fullReset);
+
     // --- Funções de Estado do Jogo ---
     function showEndGameMessage(message) {
         cancelAnimationFrame(animationFrameId);
@@ -257,30 +265,50 @@
             loseSound();
         }
     }
+    
+    function setGameParameters() {
+        // Redimensiona o canvas
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.width * (baseHeight / baseWidth);
+        
+        scale = canvas.width / baseWidth;
 
-    function resetGame() {
-        messageContainer.classList.add('hidden');
+        // Escala todos os parâmetros do jogo
+        ballRadius = 8 * scale;
+        paddleHeight = 10 * scale;
+        paddleWidth = 75 * scale;
+        brickRowCount = 5;
+        brickColumnCount = 7;
+        brickWidth = 55 * scale;
+        brickHeight = 15 * scale;
+        brickPadding = 5 * scale;
+        brickOffsetTop = 30 * scale;
+        brickOffsetLeft = (canvas.width - (brickColumnCount * (brickWidth + brickPadding))) / 2 + (brickPadding/2);
+    }
+
+    function resetGameVariables() {
         score = 0;
         x = canvas.width / 2;
-        y = canvas.height - 30;
-        dx = 3;
-        dy = -3;
+        y = canvas.height - (30 * scale);
+        dx = 3 * scale;
+        dy = -3 * scale;
         paddleX = (canvas.width - paddleWidth) / 2;
-        
+    }
+
+    function fullReset() {
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+        }
+        messageContainer.classList.add('hidden');
+        setGameParameters();
+        resetGameVariables();
         initializeBricks();
         drawScore();
-        
         draw();
     }
     
     // --- Início do Jogo ---
-    function startGame() {
-        initializeBricks();
-        drawScore();
-        draw();
-    }
-    
-    startGame();
+    fullReset();
 
 </script>
 </body>
