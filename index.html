@@ -1,380 +1,870 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Breakout Game - Níveis e Dificuldade</title>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <title>Breakout Deluxe</title>
+    <!-- Carrega a biblioteca Tone.js para o áudio -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        html, body {
-            height: 100%;
-            width: 100%;
-            overflow: hidden; /* Previne o scroll da página */
-            touch-action: none; /* Desabilita gestos de toque padrão */
+        :root {
+            --background-color: #1a1a2e;
+            --primary-color: #e94560;
+            --secondary-color: #16213e;
+            --font-color: #f0f0f0;
+            --glow-color: rgba(233, 69, 96, 0.7);
         }
-        body {
-            font-family: 'Press Start 2P', cursive;
-            background-color: #1a202c;
-            color: #e2e8f0;
+
+        /* Estilização geral e reset */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--background-color);
+            color: var(--font-color);
+            font-family: 'Courier New', Courier, monospace;
             display: flex;
             justify-content: center;
             align-items: center;
-            margin: 0;
+            flex-direction: column;
             text-align: center;
         }
-        #game-wrapper {
+
+        /* Container principal do jogo */
+        #gameContainer {
             width: 100%;
-            max-width: 600px; /* Limite máximo para telas grandes */
-            padding: 1rem;
+            max-width: 600px;
             display: flex;
             flex-direction: column;
-            align-items: center;
-        }
-        canvas {
-            background: #000;
-            display: block;
-            width: 100%; /* Ocupa a largura do container */
+            border: 2px solid var(--primary-color);
+            box-shadow: 0 0 20px var(--glow-color);
             border-radius: 8px;
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+            overflow: hidden;
+            position: relative;
         }
-        #gameInfo {
-            width: 100%;
-            margin-bottom: 1rem;
+
+        /* Barra de informações (UI) */
+        #uiBar {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 1.2rem;
+            padding: 10px 15px;
+            background-color: var(--secondary-color);
+            font-size: 1em;
+            font-weight: bold;
+            border-bottom: 2px solid var(--primary-color);
         }
-        #message-container {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: rgba(26, 32, 44, 0.9);
-            padding: 1.5rem 2rem;
-            border-radius: 12px;
-            border: 2px solid #4a5568;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+
+        #uiBar span {
+            min-width: 100px;
             text-align: center;
-            z-index: 10;
         }
-        #message-text {
-            white-space: pre; /* Permite quebras de linha com \n */
+        
+        #timerDisplay {
+            color: #ffdd00;
         }
-        #play-again-button {
-            margin-top: 1.5rem;
-            padding: 0.75rem 1.5rem;
-            font-size: 1rem;
-            color: #1a202c;
-            background-color: #63b3ed;
+
+        /* Canvas do jogo */
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            background-color: #0f3460;
+            cursor: none; /* O cursor é escondido para não interferir com a raquete */
+        }
+        
+        /* Controles do jogo */
+        #gameControls {
+            padding: 10px;
+            background-color: var(--secondary-color);
+            border-top: 2px solid var(--primary-color);
+        }
+
+        /* Botões */
+        button {
+            background-color: var(--primary-color);
+            color: var(--font-color);
             border: none;
-            border-radius: 8px;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 1em;
             cursor: pointer;
-            transition: background-color 0.3s, transform 0.2s;
-            text-transform: uppercase;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px var(--glow-color);
+            transform: translateY(-4px);
         }
-        #play-again-button:hover {
-            background-color: #4299e1;
-            transform: scale(1.05);
+
+        button:hover, button:focus {
+            background-color: #ff718e;
+            outline: none;
+        }
+        
+        button:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+
+        /* Overlay para mensagens (Game Over, Pausa, etc.) */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(26, 26, 46, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        .overlay.visible {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        .overlay-content {
+            background-color: var(--secondary-color);
+            padding: 30px;
+            border-radius: 10px;
+            border: 2px solid var(--primary-color);
+            box-shadow: 0 0 25px var(--glow-color);
+            text-align: center;
+        }
+
+        .overlay-content h2 {
+            margin-bottom: 20px;
+            color: var(--primary-color);
+            font-size: 2em;
+        }
+        
+        .overlay-content p {
+            margin-bottom: 25px;
+            font-size: 1.2em;
+        }
+
+        .overlay-content input {
+            padding: 10px;
+            width: 80%;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            border: 2px solid var(--primary-color);
+            background-color: var(--background-color);
+            color: var(--font-color);
+            font-family: 'Courier New', Courier, monospace;
+            text-align: center;
+            font-size: 1.1em;
+        }
+        
+        /* Responsividade */
+        @media (max-width: 600px) {
+            #uiBar {
+                font-size: 0.8em;
+                padding: 8px 10px;
+            }
+            #uiBar span {
+                min-width: 80px;
+            }
         }
     </style>
 </head>
 <body>
 
-<div id="game-wrapper">
-    <h1 class="text-3xl md:text-4xl mb-2 text-blue-300">Breakout Levels</h1>
-    <div id="gameInfo" class="text-sm md:text-base">
-        <span>PONTOS: <span id="score">0</span></span>
-        <span>NÍVEL: <span id="level">1</span></span>
+    <div id="gameContainer">
+        <!-- Barra de Informações do Jogo -->
+        <div id="uiBar">
+            <span id="scoreDisplay">Pontuação: 0</span>
+            <span id="levelDisplay">Nível: 1</span>
+            <span id="timerDisplay"></span>
+        </div>
+        
+        <!-- Canvas onde o jogo é renderizado -->
+        <canvas id="gameCanvas"></canvas>
+        
+        <!-- Controles do Jogo (botão de pausa) -->
+        <div id="gameControls">
+            <button id="pauseButton">Pausar</button>
+        </div>
+
+        <!-- Overlay para mensagens de Nickname -->
+        <div id="nicknameOverlay" class="overlay visible">
+             <div class="overlay-content">
+                <h2>Bem-vindo ao Breakout Deluxe!</h2>
+                <p>Por favor, insira o seu nickname para começar:</p>
+                <input type="text" id="nicknameInput" maxlength="15" placeholder="Seu Nickname">
+                <button id="startGameButton">Iniciar Jogo</button>
+            </div>
+        </div>
+
+        <!-- Overlay para mensagens gerais (Pausa, Fim de Jogo, etc.) -->
+        <div id="messageOverlay" class="overlay">
+            <div class="overlay-content">
+                <h2 id="messageTitle"></h2>
+                <p id="messageText"></p>
+                <button id="messageButton"></button>
+            </div>
+        </div>
     </div>
-    <canvas id="gameCanvas"></canvas>
-    <div id="message-container" class="hidden">
-        <h2 id="message-text" class="text-2xl md:text-3xl mb-2"></h2>
-        <button id="play-again-button">Jogar Novamente</button>
-    </div>
-</div>
 
-<script>
-    // --- Elementos do DOM ---
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    const scoreElement = document.getElementById('score');
-    const levelElement = document.getElementById('level');
-    const messageContainer = document.getElementById('message-container');
-    const messageText = document.getElementById('message-text');
-    const playAgainButton = document.getElementById('play-again-button');
-    
-    // --- Configuração de Som ---
-    const synth = new Tone.PolySynth(Tone.Synth).toDestination();
-    synth.volume.value = -8;
-    const brickHitSound = () => synth.triggerAttackRelease("C5", "8n", Tone.now());
-    const brickBreakSound = () => synth.triggerAttackRelease("E5", "8n", Tone.now());
-    const wallHitSound = () => synth.triggerAttackRelease("G3", "8n", Tone.now());
-    const paddleHitSound = () => synth.triggerAttackRelease("G4", "8n", Tone.now());
-    const loseSound = () => synth.triggerAttackRelease("C3", "2n", Tone.now());
-    const winSound = () => synth.triggerAttackRelease("G5", "2n", Tone.now());
-    const levelUpSound = () => synth.triggerAttackRelease("C6", "4n", Tone.now());
-    let audioStarted = false;
+    <script>
+        // Aguarda o carregamento completo da página para iniciar o jogo
+        window.onload = function() {
+            
+            // --- VARIÁVEIS E CONSTANTES GLOBAIS --- //
 
-    // --- Estrutura dos Níveis ---
-    // ' ' = Espaço vazio, '1' = Bloco normal, '2' = Bloco resistente
-    const levelDesigns = [
-        // Nível 1
-        [
-            " 11111 ",
-            "1111111",
-            "11 1 11",
-            "1111111",
-            " 11111 ",
-        ],
-        // Nível 2
-        [
-            "2222222",
-            "2111112",
-            " 21112 ",
-            "  212  ",
-            "   2   ",
-        ],
-        // Nível 3
-        [
-            "2 2 2 2",
-            "1212121",
-            "2121212",
-            "1212121",
-            " 2 2 2 ",
-        ]
-    ];
-    const brickColors = {
-        1: { main: "#22c55e", dark: "#166534" }, // Verde
-        2: { main: "#f97316", dark: "#9a3412" }  // Laranja
-    };
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
 
-    // --- Variáveis Globais ---
-    let animationFrameId;
-    let score = 0;
-    let level = 1;
-    let breakableBricksCount = 0;
-    const baseWidth = 480, baseHeight = 320;
-    let scale = 1;
-    let ballSpeed, ballRadius, x, y, dx, dy;
-    let paddleHeight, paddleWidth, paddleX, lastPaddleX, paddleVelocity;
-    let brickWidth, brickHeight, brickPadding, brickOffsetTop, brickOffsetLeft;
-    let bricks = [];
-    const maxAngleSteer = 5, paddleInfluenceFactor = 0.4;
+            // Elementos da UI
+            const ui = {
+                scoreDisplay: document.getElementById('scoreDisplay'),
+                levelDisplay: document.getElementById('levelDisplay'),
+                timerDisplay: document.getElementById('timerDisplay'),
+                pauseButton: document.getElementById('pauseButton'),
+                nicknameOverlay: document.getElementById('nicknameOverlay'),
+                nicknameInput: document.getElementById('nicknameInput'),
+                startGameButton: document.getElementById('startGameButton'),
+                messageOverlay: document.getElementById('messageOverlay'),
+                messageTitle: document.getElementById('messageTitle'),
+                messageText: document.getElementById('messageText'),
+                messageButton: document.getElementById('messageButton')
+            };
 
-    // --- Funções de Desenho ---
-    function drawBall() { /* ...código inalterado... */ }
-    function drawPaddle() { /* ...código inalterado... */ }
-    function drawScore() {
-        scoreElement.textContent = score;
-        levelElement.textContent = level;
-    }
-    
-    function drawBricks() {
-        for (let c = 0; c < bricks.length; c++) {
-            for (let r = 0; r < bricks[c].length; r++) {
-                const b = bricks[c][r];
-                if (b.status > 0) {
-                    const brickX = c * (brickWidth + brickPadding) + brickOffsetLeft;
-                    const brickY = r * (brickHeight + brickPadding) + brickOffsetTop;
-                    b.x = brickX;
-                    b.y = brickY;
+            // Estado do Jogo
+            let gameState = {
+                paused: false,
+                gameOver: false,
+                levelComplete: false,
+                nickname: '',
+                score: 0,
+                level: 1,
+                timer: null,
+                timerId: null,
+                animationFrameId: null,
+                audioStarted: false
+            };
+
+            // Configurações do Jogo
+            const config = {
+                brickRowCount: 10,
+                brickColumnCount: 8,
+                paddleHeight: 15,
+                paddleWidth: 120,
+                ballRadius: 10,
+                baseBallSpeed: 4,
+                maxLevels: 15
+            };
+
+            // --- OBJETOS DO JOGO (RAQUETE, BOLA, BLOCOS) --- //
+            
+            let paddle = {
+                x: 0,
+                y: 0,
+                width: config.paddleWidth,
+                height: config.paddleHeight,
+                dx: 0, // Velocidade horizontal da raquete para o efeito de "corte"
+                lastX: 0
+            };
+
+            let balls = [];
+            let bricks = [];
+            let particles = [];
+
+            // --- DEFINIÇÃO DOS NÍVEIS --- //
+            // 0: Vazio, 1: Normal, 2: Resistente, 'E': Explosivo, 'M': Multi-bolas
+            const levelLayouts = [
+                // Nível 1
+                [[1,1,1,1,1,1,1,1], [1,1,1,1,1,1,1,1], [1,1,0,0,0,0,1,1], [1,1,0,0,0,0,1,1]],
+                // Nível 2
+                [[0,1,1,1,1,1,1,0], [1,1,1,1,1,1,1,1], [1,1,2,1,1,2,1,1], [1,1,1,'E','E',1,1,1], [0,1,1,1,1,1,1,0]],
+                // Nível 3
+                [[2,2,2,2,2,2,2,2], [2,1,1,1,1,1,1,2], [1,1,'E',0,0,'E',1,1], [1,0,1,0,0,1,0,1], [1,0,1,1,1,1,0,1]],
+                // Nível 4
+                [[1,1,'M',1,1,'M',1,1], [1,2,1,2,1,2,1,2], [2,1,2,1,2,1,2,1], [0,1,1,1,1,1,1,0], [0,0,'E',2,2,'E',0,0]],
+                // Nível 5
+                [[0,0,1,1,1,1,0,0], [0,1,2,2,2,2,1,0], [1,2,1,'E','E',1,2,1], [1,2,1,'M','M',1,2,1], [0,1,2,2,2,2,1,0], [0,0,1,1,1,1,0,0]],
+                // Nível 6
+                [[2,2,2,0,0,2,2,2], [2,0,2,0,0,2,0,2], [2,0,2,0,0,2,0,2], [2,2,2,'M','M',2,2,2]],
+                // Nível 7
+                [['E',1,1,1,1,1,1,'E'], [1,2,0,0,0,0,2,1], [1,0,2,0,0,2,0,1], [1,0,0,'M','M',0,0,1], [1,0,2,0,0,2,0,1], [1,2,0,0,0,0,2,1], ['E',1,1,1,1,1,1,'E']],
+                // Nível 8
+                [[1,2,1,2,1,2,1,2], [2,1,2,1,2,1,2,1], [0,0,0,0,0,0,0,0], [1,'E',1,'M','M',1,'E',1], [0,0,0,0,0,0,0,0], [2,1,2,1,2,1,2,1], [1,2,1,2,1,2,1,2]],
+                // Nível 9
+                [[2,2,2,2,2,2,2,2], [0,0,0,'E','E',0,0,0], [2,2,2,2,2,2,2,2], [0,0,0,'M','M',0,0,0], [2,2,2,2,2,2,2,2]],
+                // Nível 10
+                [[1,1,0,1,1,0,1,1], [1,1,1,1,1,1,1,1], [1,1,2,'E','E',2,1,1], [1,1,1,'M','M',1,1,1], [1,1,1,1,1,1,1,1], [0,1,1,1,1,1,1,0]],
+                // Nível 11
+                [[0,0,2,'E','E',2,0,0], [0,2,1,2,2,1,2,0], [2,1,2,1,1,2,1,2], [1,2,1,'M','M',1,2,1], [2,1,2,1,1,2,1,2], [0,2,1,2,2,1,2,0], [0,0,2,'E','E',2,0,0]],
+                // Nível 12
+                [[2,1,2,1,1,2,1,2], [1,'E',1,0,0,1,'E',1], [2,1,2,'M','M',2,1,2], [1,0,1,2,2,1,0,1], [2,1,2,0,0,2,1,2], [1,2,1,'E','E',1,2,1]],
+                // Nível 13
+                [[1,1,1,1,1,1,1,1], ['E',2,'E',2,'E',2,'E',2], [1,1,1,1,1,1,1,1], [2,'M',2,'M',2,'M',2,'M'], [1,1,1,1,1,1,1,1]],
+                // Nível 14
+                [[2,2,0,'E','E',0,2,2], [2,1,2,'M','M',2,1,2], [0,2,1,2,2,1,2,0], ['E',1,2,1,1,2,1,'E'], ['M',2,1,2,2,1,2,'M'], [0,1,2,0,0,2,1,0], [2,1,0,2,2,0,1,2]],
+                // Nível 15
+                [['E',2,1,'M','M',1,2,'E'], [2,1,2,1,1,2,1,2], [1,2,1,2,2,1,2,1], ['M',1,2,'E','E',2,1,'M'], [1,2,1,2,2,1,2,1], [2,1,2,1,1,2,1,2], ['E',2,1,'M','M',1,2,'E']]
+            ];
+
+            // --- CONFIGURAÇÃO DE ÁUDIO (TONE.JS) --- //
+            let sounds;
+            function setupAudio() {
+                sounds = {
+                    paddleHit: new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 0.1 } }).toDestination(),
+                    wallHit: new Tone.MembraneSynth({ pitchDecay: 0.01, octaves: 2, envelope: { attack: 0.001, decay: 0.2, sustain: 0 } }).toDestination(),
+                    brickBreak: new Tone.Player("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA").toDestination(), // Som de "click" curto
+                    explosion: new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.005, decay: 0.3, sustain: 0 } }).toDestination(),
+                    multiBall: new Tone.PluckSynth({ attackNoise: 1, dampening: 4000, resonance: 0.7 }).toDestination(),
+                    levelComplete: new Tone.Synth({ oscillator: { type: "triangle" }, envelope: { attack: 0.05, decay: 0.2, sustain: 0.5, release: 0.8 } }).toDestination(),
+                    gameOver: new Tone.Synth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.01, decay: 0.5, sustain: 0.1, release: 1 } }).toDestination(),
+                };
+                sounds.brickBreak.volume.value = -10;
+                sounds.wallHit.volume.value = -10;
+            }
+
+            // --- FUNÇÕES DO JOGO --- //
+
+            // Inicia o contexto de áudio após a primeira interação do usuário
+            function initAudio() {
+                if (!gameState.audioStarted) {
+                    Tone.start();
+                    setupAudio();
+                    gameState.audioStarted = true;
+                }
+            }
+
+            // Redimensiona o canvas para preencher o container
+            function resizeCanvas() {
+                const containerWidth = canvas.parentElement.clientWidth;
+                canvas.width = containerWidth;
+                canvas.height = containerWidth * 1; // Proporção 1:1
+                paddle.y = canvas.height - paddle.height - 20;
+            }
+
+            // Cria os blocos para o nível atual
+            function createBricks() {
+                bricks = [];
+                const layout = levelLayouts[gameState.level - 1];
+                if (!layout) {
+                    // Se não houver mais níveis, o jogador venceu
+                    winGame();
+                    return;
+                }
+
+                const brickPadding = 5;
+                const brickOffsetTop = 30;
+                const brickOffsetLeft = 20;
+                const brickHeight = 25;
+                
+                // Cálculo da largura do bloco corrigido para caber no canvas
+                const availableWidth = canvas.width - (brickOffsetLeft * 2);
+                const brickWidth = (availableWidth - (config.brickColumnCount - 1) * brickPadding) / config.brickColumnCount;
+
+
+                layout.forEach((row, rowIndex) => {
+                    row.forEach((brickType, colIndex) => {
+                        if (brickType !== 0) {
+                            let health = 1;
+                            let color = '#e94560';
+                            let special = null;
+
+                            if (brickType === 2) { // Bloco resistente
+                                health = 2;
+                                color = '#a239ea';
+                            } else if (brickType === 'E') { // Bloco explosivo
+                                special = 'explosive';
+                                color = '#ff9a00';
+                            } else if (brickType === 'M') { // Bloco multi-bolas
+                                special = 'multiball';
+                                color = '#00f5d4';
+                            }
+
+                            bricks.push({
+                                x: colIndex * (brickWidth + brickPadding) + brickOffsetLeft,
+                                y: rowIndex * (brickHeight + brickPadding) + brickOffsetTop,
+                                width: brickWidth,
+                                height: brickHeight,
+                                health: health,
+                                baseColor: color,
+                                special: special,
+                                status: 1
+                            });
+                        }
+                    });
+                });
+            }
+            
+            // Cria uma nova bola
+            function createBall(x, y, vx, vy) {
+                return {
+                    x: x,
+                    y: y,
+                    vx: vx,
+                    vy: vy,
+                    speed: config.baseBallSpeed,
+                    radius: config.ballRadius,
+                    color: '#f0f0f0'
+                };
+            }
+
+            // Reseta a(s) bola(s) e a raquete
+            function resetPaddleAndBall() {
+                balls = [];
+                paddle.x = (canvas.width - paddle.width) / 2;
+                const ball = createBall(canvas.width / 2, paddle.y - config.ballRadius - 5, 0, -config.baseBallSpeed);
+                balls.push(ball);
+            }
+
+            // Detecção de colisão
+            function collisionDetection() {
+                for (let i = balls.length - 1; i >= 0; i--) {
+                    const ball = balls[i];
+
+                    // BUG FIX: Lógica de colisão com as paredes melhorada para evitar que a bola fique presa.
+                    // A posição da bola já foi atualizada no `update()`, então verificamos a posição atual.
+                    
+                    // Colisão com paredes laterais
+                    if (ball.x > canvas.width - ball.radius) {
+                        ball.x = canvas.width - ball.radius; // Reposiciona a bola para não ficar presa
+                        ball.vx = -ball.vx;                  // Inverte a direção
+                        if(gameState.audioStarted) sounds.wallHit.triggerAttackRelease("C2", "8n", Tone.now());
+                    } else if (ball.x < ball.radius) {
+                        ball.x = ball.radius;                // Reposiciona a bola
+                        ball.vx = -ball.vx;                  // Inverte a direção
+                        if(gameState.audioStarted) sounds.wallHit.triggerAttackRelease("C2", "8n", Tone.now());
+                    }
+
+                    // Colisão com parede superior
+                    if (ball.y < ball.radius) {
+                        ball.y = ball.radius;                 // Reposiciona a bola
+                        ball.vy = -ball.vy;                   // Inverte a direção
+                        if(gameState.audioStarted) sounds.wallHit.triggerAttackRelease("C2", "8n", Tone.now());
+                    } 
+                    // Colisão com parede inferior (fim de jogo)
+                    else if (ball.y > canvas.height - ball.radius) {
+                        // A bola atingiu o fundo, não precisa reposicionar, apenas remover.
+                        balls.splice(i, 1); // Remove a bola
+                        if (balls.length === 0) {
+                            // Se for a última bola, perde o nível
+                            if(gameState.audioStarted) sounds.gameOver.triggerAttackRelease("C2", "0.5s", Tone.now());
+                            showMessage('Nível Falhou!', `Você perdeu todas as bolas. Pontuação: ${gameState.score}`, 'Tentar Novamente', () => {
+                                loadLevel(gameState.level);
+                            });
+                        }
+                        continue; // Pula para o resto da lógica desta bola, pois ela foi removida
+                    }
+
+
+                    // Colisão com a raquete
+                    if (ball.y > paddle.y - ball.radius && ball.y < paddle.y + paddle.height &&
+                        ball.x > paddle.x && ball.x < paddle.x + paddle.width) {
+                        
+                        // Detecta se a bola estava acima da raquete no frame anterior para evitar colisões laterais indesejadas
+                        if (ball.y - ball.vy <= paddle.y) {
+                            // Ponto de impacto na raquete (-1 a 1)
+                            let collidePoint = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
+                            
+                            // Ângulo de reflexão (max 60 graus)
+                            let angle = collidePoint * (Math.PI / 3);
+                            
+                            // Aumenta a velocidade da bola a cada rebatida
+                            ball.speed = Math.min(ball.speed + 0.1, config.baseBallSpeed * 2);
+
+                            ball.vx = ball.speed * Math.sin(angle);
+                            ball.vy = -ball.speed * Math.cos(angle);
+                            
+                            // Efeito de "corte" baseado no movimento da raquete
+                            ball.vx += paddle.dx * 0.3;
+
+                            if(gameState.audioStarted) sounds.paddleHit.triggerAttackRelease("C4", "8n", Tone.now());
+                        }
+                    }
+
+                    // Colisão com os blocos
+                    for (let j = bricks.length - 1; j >= 0; j--) {
+                        const b = bricks[j];
+                        if (b.status === 1) {
+                            // Detecção de colisão AABB (Axis-Aligned Bounding Box)
+                            if (ball.x + ball.radius > b.x && 
+                                ball.x - ball.radius < b.x + b.width && 
+                                ball.y + ball.radius > b.y && 
+                                ball.y - ball.radius < b.y + b.height) {
+                                
+                                ball.vy = -ball.vy; // Resposta de colisão simples, mas eficaz
+                                b.health--;
+
+                                if (b.health <= 0) {
+                                    b.status = 0;
+                                    gameState.score += 10;
+                                    if(gameState.audioStarted) sounds.brickBreak.stop().start(Tone.now());
+
+                                    // Lida com blocos especiais
+                                    if (b.special === 'explosive') {
+                                        explode(j);
+                                        if(gameState.audioStarted) sounds.explosion.triggerAttackRelease("0.3s", Tone.now());
+                                    }
+                                    if (b.special === 'multiball') {
+                                        activateMultiBall(b.x + b.width / 2, b.y + b.height / 2);
+                                        if(gameState.audioStarted) sounds.multiBall.triggerAttackRelease("G4", "0.5s", Tone.now());
+                                    }
+                                } else {
+                                    // Bloco resistente foi atingido mas não quebrado
+                                    if(gameState.audioStarted) sounds.wallHit.triggerAttackRelease("A3", "8n", Tone.now());
+                                }
+                                break; // Sai do loop de blocos para evitar múltiplas colisões em um frame
+                            }
+                        }
+                    }
+                }
+                checkLevelComplete();
+            }
+            
+            // Verifica se todos os blocos quebráveis foram destruídos
+            function checkLevelComplete() {
+                const breakableBricksLeft = bricks.filter(b => b.status === 1).length;
+                if (breakableBricksLeft === 0 && !gameState.levelComplete && !gameState.gameOver) {
+                    gameState.levelComplete = true;
+                    if (gameState.level >= config.maxLevels) {
+                        winGame();
+                    } else {
+                        if(gameState.audioStarted) sounds.levelComplete.triggerAttackRelease("C5", "0.5s", Tone.now());
+                        if(gameState.audioStarted) sounds.levelComplete.triggerAttackRelease("G5", "0.5s", Tone.now() + 0.2);
+                        if(gameState.audioStarted) sounds.levelComplete.triggerAttackRelease("C6", "0.5s", Tone.now() + 0.4);
+
+                        showMessage('Nível Completo!', `Pontuação: ${gameState.score}`, 'Próximo Nível', () => {
+                            gameState.level++;
+                            loadLevel(gameState.level);
+                        });
+                    }
+                    saveGame();
+                }
+            }
+            
+            function winGame() {
+                gameState.gameOver = true;
+                showMessage('Parabéns!', `Você completou todos os níveis! Pontuação final: ${gameState.score}`, 'Jogar Novamente', () => {
+                    loadLevel(1);
+                });
+                localStorage.removeItem('breakoutDeluxeSave');
+            }
+
+
+            // Função para explosão
+            function explode(brickIndex) {
+                const sourceBrick = bricks[brickIndex];
+                createParticles(sourceBrick.x + sourceBrick.width / 2, sourceBrick.y + sourceBrick.height / 2, 30, '#ff9a00');
+
+                bricks.forEach((b, i) => {
+                    if (b.status === 1 && i !== brickIndex) {
+                        // Verifica se o bloco 'b' está adjacente ao 'sourceBrick' (área 3x3 imaginária)
+                        const isAdjacent = Math.abs(b.x - sourceBrick.x) <= b.width + 5 && Math.abs(b.y - sourceBrick.y) <= b.height + 5;
+                        if (isAdjacent) {
+                            b.status = 0;
+                            gameState.score += 10;
+                            createParticles(b.x + b.width / 2, b.y + b.height / 2, 10, b.baseColor);
+                        }
+                    }
+                });
+            }
+
+            // Função para multi-bolas
+            function activateMultiBall(x, y) {
+                createParticles(x, y, 50, '#00f5d4');
+                for (let i = 0; i < 5; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const newBall = createBall(x, y, Math.cos(angle) * config.baseBallSpeed, Math.sin(angle) * config.baseBallSpeed);
+                    balls.push(newBall);
+                }
+            }
+
+            // Função para criar partículas
+            function createParticles(x, y, count, color) {
+                for (let i = 0; i < count; i++) {
+                    particles.push({
+                        x: x,
+                        y: y,
+                        vx: (Math.random() - 0.5) * 4,
+                        vy: (Math.random() - 0.5) * 4,
+                        radius: Math.random() * 2 + 1,
+                        lifespan: 100, // Frames
+                        color: color
+                    });
+                }
+            }
+
+            // Atualiza e desenha as partículas
+            function handleParticles() {
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    const p = particles[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.lifespan--;
+
+                    if (p.lifespan <= 0) {
+                        particles.splice(i, 1);
+                    } else {
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                        ctx.fillStyle = p.color;
+                        ctx.globalAlpha = p.lifespan / 100;
+                        ctx.fill();
+                        ctx.closePath();
+                    }
+                }
+                ctx.globalAlpha = 1.0;
+            }
+
+
+            // Funções de desenho no canvas
+            function drawPaddle() {
+                ctx.beginPath();
+                ctx.roundRect(paddle.x, paddle.y, paddle.width, paddle.height, 10);
+                ctx.fillStyle = '#16e0bd';
+                ctx.fill();
+                ctx.closePath();
+            }
+
+            function drawBalls() {
+                balls.forEach(ball => {
                     ctx.beginPath();
-                    // Escolhe a cor baseada na vida (status) do bloco
-                    ctx.fillStyle = b.status === 2 ? brickColors['2'].main : brickColors['1'].main;
-                    ctx.roundRect(brickX, brickY, brickWidth, brickHeight, 3 * scale);
+                    ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = ball.color;
                     ctx.fill();
                     ctx.closePath();
-                }
+                });
             }
-        }
-    }
-    
-    // --- Lógica do Jogo ---
-    function initializeBricksForLevel(levelNum) {
-        bricks = [];
-        breakableBricksCount = 0;
-        const design = levelDesigns[levelNum - 1];
-        if (!design) return;
 
-        const designWidth = design[0].length;
-        const designHeight = design.length;
-
-        // Recalcular offset para centralizar o layout do nível
-        brickOffsetLeft = (canvas.width - (designWidth * (brickWidth + brickPadding))) / 2 + (brickPadding/2);
-        
-        for (let c = 0; c < designWidth; c++) {
-            bricks[c] = [];
-            for (let r = 0; r < designHeight; r++) {
-                const brickType = parseInt(design[r][c] || '0');
-                if (brickType > 0) {
-                    bricks[c][r] = { x: 0, y: 0, status: brickType };
-                    breakableBricksCount++;
-                } else {
-                    bricks[c][r] = { x: 0, y: 0, status: 0 };
-                }
-            }
-        }
-    }
-
-    function collisionDetection() {
-        for (let c = 0; c < bricks.length; c++) {
-            for (let r = 0; r < bricks[c].length; r++) {
-                const b = bricks[c][r];
-                if (b.status > 0) {
-                    if (x > b.x && x < b.x + brickWidth && y > b.y && y < b.y + brickHeight) {
-                        dy = -dy;
-                        b.status--;
-                        if (b.status === 0) {
-                            brickBreakSound();
-                            score += 10;
-                            breakableBricksCount--;
-                            if (breakableBricksCount <= 0) {
-                                goToNextLevel();
-                            }
+            function drawBricks() {
+                bricks.forEach(b => {
+                    if (b.status === 1) {
+                        ctx.beginPath();
+                        ctx.rect(b.x, b.y, b.width, b.height);
+                        if (b.health < 2) {
+                             ctx.fillStyle = b.baseColor;
                         } else {
-                            brickHitSound();
-                            score += 5;
+                             // Efeito de "dano" para blocos resistentes
+                             ctx.fillStyle = `color-mix(in srgb, ${b.baseColor} 50%, #1a1a2e)`;
                         }
-                        drawScore();
-                        return; // Evita múltiplas colisões no mesmo frame
+                        ctx.fill();
+
+                        // Adiciona a letra para blocos especiais
+                        if (b.special) {
+                            ctx.fillStyle = '#f0f0f0';
+                            ctx.font = 'bold 16px Courier New';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillText(b.special.charAt(0).toUpperCase(), b.x + b.width / 2, b.y + b.height / 2);
+                        }
+                        ctx.closePath();
+                    }
+                });
+            }
+
+            // Atualiza a UI
+            function updateUI() {
+                ui.scoreDisplay.textContent = `Pontuação: ${gameState.score}`;
+                ui.levelDisplay.textContent = `Nível: ${gameState.nickname ? gameState.nickname + ' - ' : ''}${gameState.level}`;
+                if (gameState.timer !== null) {
+                    ui.timerDisplay.textContent = `Tempo: ${Math.ceil(gameState.timer)}`;
+                    ui.timerDisplay.style.visibility = 'visible';
+                } else {
+                    ui.timerDisplay.style.visibility = 'hidden';
+                }
+            }
+
+            // Função principal de desenho
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawBricks();
+                drawPaddle();
+                drawBalls();
+                handleParticles();
+            }
+
+            // Função principal de atualização da lógica
+            function update() {
+                // Atualiza a posição da(s) bola(s)
+                balls.forEach(ball => {
+                    ball.x += ball.vx;
+                    ball.y += ball.vy;
+                });
+                
+                // Atualiza a velocidade da raquete para o efeito de "corte"
+                paddle.dx = paddle.x - paddle.lastX;
+                paddle.lastX = paddle.x;
+
+                collisionDetection();
+            }
+            
+            // Loop principal do jogo
+            function gameLoop() {
+                if (!gameState.paused && !gameState.gameOver && !gameState.levelComplete) {
+                    update();
+                }
+                draw();
+                updateUI();
+                gameState.animationFrameId = requestAnimationFrame(gameLoop);
+            }
+
+            // Gerenciamento de persistência (localStorage)
+            function saveGame() {
+                const saveData = {
+                    nickname: gameState.nickname,
+                    score: gameState.score,
+                    level: gameState.level
+                };
+                localStorage.setItem('breakoutDeluxeSave', JSON.stringify(saveData));
+            }
+
+            function loadGame() {
+                const savedData = localStorage.getItem('breakoutDeluxeSave');
+                if (savedData) {
+                    const data = JSON.parse(savedData);
+                    gameState.nickname = data.nickname;
+                    gameState.score = data.score;
+                    gameState.level = data.level;
+                    ui.nicknameOverlay.classList.remove('visible');
+                    loadLevel(gameState.level);
+                    return true;
+                }
+                return false;
+            }
+
+            // Gerenciador do temporizador
+            function startTimer() {
+                if (gameState.timerId) clearInterval(gameState.timerId);
+
+                if (gameState.level >= 3) {
+                    const breakableBricks = bricks.filter(b => b.status === 1).length;
+                    gameState.timer = 40 + breakableBricks; // 40s base + 1s por bloco
+
+                    gameState.timerId = setInterval(() => {
+                        if (!gameState.paused && !gameState.gameOver && !gameState.levelComplete) {
+                            gameState.timer--;
+                            if (gameState.timer <= 0) {
+                                clearInterval(gameState.timerId);
+                                gameState.gameOver = true;
+                                if(gameState.audioStarted) sounds.gameOver.triggerAttackRelease("A2", "0.8s", Tone.now());
+                                showMessage('Tempo Esgotado!', `Sua pontuação foi ${gameState.score}`, 'Tentar Novamente', () => {
+                                    loadLevel(gameState.level);
+                                });
+                            }
+                        }
+                    }, 1000);
+                } else {
+                    gameState.timer = null;
+                }
+            }
+
+            // Mostra mensagens na tela
+            function showMessage(title, text, buttonText, callback) {
+                if (gameState.timerId) clearInterval(gameState.timerId);
+                
+                ui.messageTitle.textContent = title;
+                ui.messageText.textContent = text;
+                ui.messageButton.textContent = buttonText;
+                
+                // Remove o listener antigo para evitar múltiplos cliques
+                const newButton = ui.messageButton.cloneNode(true);
+                ui.messageButton.parentNode.replaceChild(newButton, ui.messageButton);
+                ui.messageButton = newButton;
+                
+                ui.messageButton.onclick = () => {
+                    ui.messageOverlay.classList.remove('visible');
+                    callback();
+                };
+                ui.messageOverlay.classList.add('visible');
+            }
+            
+            // Carrega um nível
+            function loadLevel(level) {
+                gameState.gameOver = false;
+                gameState.levelComplete = false;
+                gameState.paused = false;
+                if(level === 1) gameState.score = 0; // Reseta a pontuação se voltar para o nível 1
+
+                gameState.level = level;
+                
+                resizeCanvas();
+                createBricks();
+                resetPaddleAndBall();
+                startTimer();
+                
+                // Reinicia o loop do jogo se ele não estiver rodando
+                if (!gameState.animationFrameId) {
+                    gameLoop();
+                }
+            }
+
+            // --- EVENT LISTENERS --- //
+
+            function handleMouseMove(e) {
+                const relativeX = e.clientX - canvas.getBoundingClientRect().left;
+                if (relativeX > 0 && relativeX < canvas.width) {
+                    paddle.x = Math.max(0, Math.min(relativeX - paddle.width / 2, canvas.width - paddle.width));
+                }
+            }
+
+            function handleTouchMove(e) {
+                e.preventDefault();
+                if (e.touches.length > 0) {
+                    const touch = e.touches[0];
+                    const relativeX = touch.clientX - canvas.getBoundingClientRect().left;
+                    if (relativeX > 0 && relativeX < canvas.width) {
+                        paddle.x = Math.max(0, Math.min(relativeX - paddle.width / 2, canvas.width - paddle.width));
                     }
                 }
             }
-        }
-    }
-
-    function draw() {
-        // ...lógica de movimento e colisões com paredes e raquete (semelhante ao anterior)...
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        drawBricks();
-        drawBall();
-        drawPaddle();
-        collisionDetection();
-        
-        paddleVelocity = (paddleX - lastPaddleX) * paddleInfluenceFactor;
-
-        if (x + dx > canvas.width - ballRadius || x + dx < ballRadius) {
-            dx = -dx;
-            wallHitSound();
-        }
-
-        if (y + dy < ballRadius) {
-            dy = -dy;
-            wallHitSound();
-        } else if (y + dy > canvas.height - ballRadius - paddleHeight) {
-            if (x > paddleX && x < paddleX + paddleWidth) {
-                dy = -dy;
-                paddleHitSound();
-                let impactPoint = (x - (paddleX + paddleWidth / 2)) / (paddleWidth / 2);
-                let newDx = impactPoint * maxAngleSteer * scale;
-                newDx += paddleVelocity;
-                let currentSpeed = Math.sqrt(newDx * newDx + dy * dy);
-                dx = (newDx / currentSpeed) * ballSpeed;
-                dy = (dy / currentSpeed) * ballSpeed;
-            } else {
-                showEndGameMessage("FIM DE JOGO", true);
-                return;
+            
+            // Pausar/Retomar
+            function togglePause() {
+                initAudio();
+                gameState.paused = !gameState.paused;
+                ui.pauseButton.textContent = gameState.paused ? 'Retomar' : 'Pausar';
+                
+                if (gameState.paused) {
+                    showMessage('Pausado', '', 'Retomar', togglePause);
+                } else {
+                    ui.messageOverlay.classList.remove('visible');
+                }
             }
-        }
 
-        x += dx;
-        y += dy;
-        lastPaddleX = paddleX;
-        animationFrameId = requestAnimationFrame(draw);
-    }
-    
-    // --- Controles e Eventos ---
-    function handleMove(e) { /* ...código inalterado... */ }
-    document.addEventListener('mousemove', handleMove, false);
-    document.addEventListener('touchmove', (e) => { e.preventDefault(); handleMove(e); }, { passive: false });
-    playAgainButton.addEventListener('click', fullReset);
-    window.addEventListener('resize', fullReset);
+            document.addEventListener('mousemove', handleMouseMove);
+            canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+            window.addEventListener('resize', () => {
+                resizeCanvas();
+                createBricks(); // Recria os blocos para se ajustarem ao novo tamanho
+            });
 
-    // --- Funções de Estado do Jogo ---
-    function showEndGameMessage(message, isLoss = false) {
-        cancelAnimationFrame(animationFrameId);
-        messageText.textContent = message;
-        messageContainer.classList.remove('hidden');
-        if (isLoss) {
-            loseSound();
-        } else {
-            winSound();
-        }
-    }
+            ui.pauseButton.addEventListener('click', togglePause);
+            
+            ui.startGameButton.addEventListener('click', () => {
+                initAudio();
+                const nickname = ui.nicknameInput.value.trim();
+                if (nickname) {
+                    gameState.nickname = nickname;
+                    ui.nicknameOverlay.classList.remove('visible');
+                    saveGame();
+                    loadLevel(1);
+                } else {
+                    alert('Por favor, insira um nickname.');
+                }
+            });
 
-    function goToNextLevel() {
-        cancelAnimationFrame(animationFrameId);
-        level++;
-        if (level > levelDesigns.length) {
-            showEndGameMessage("VOCÊ VENCEU!\nPontuação Final: " + score);
-        } else {
-            levelUpSound();
-            showEndGameMessage(`NÍVEL ${level}`, false);
-            // Remove o botão de "jogar novamente" e continua automaticamente
-            playAgainButton.classList.add('hidden');
-            setTimeout(() => {
-                messageContainer.classList.add('hidden');
-                playAgainButton.classList.remove('hidden'); // Prepara para a próxima vez
-                startLevel();
-            }, 2000);
-        }
-    }
-    
-    function setGameParameters() {
-        canvas.width = canvas.clientWidth;
-        canvas.height = canvas.width * (baseHeight / baseWidth);
-        scale = canvas.width / baseWidth;
-
-        ballRadius = 8 * scale;
-        paddleHeight = 12 * scale;
-        paddleWidth = 80 * scale;
-        // Aumenta a velocidade da bola a cada nível
-        ballSpeed = (3.5 + (level * 0.5)) * scale;
-        
-        const designWidth = levelDesigns[level - 1][0].length;
-        brickPadding = 5 * scale;
-        brickWidth = (canvas.width / designWidth) - brickPadding;
-        brickHeight = 15 * scale;
-        brickOffsetTop = 30 * scale;
-    }
-
-    function resetBallAndPaddle() {
-        x = canvas.width / 2;
-        y = canvas.height - (60 * scale);
-        let angle = Math.random() * Math.PI / 2 + Math.PI / 4;
-        dx = Math.cos(angle) * ballSpeed;
-        dy = -Math.sin(angle) * ballSpeed;
-        paddleX = (canvas.width - paddleWidth) / 2;
-        lastPaddleX = paddleX;
-        paddleVelocity = 0;
-    }
-    
-    function startLevel() {
-        if (animationFrameId) cancelAnimationFrame(animationFrameId);
-        setGameParameters();
-        resetBallAndPaddle();
-        initializeBricksForLevel(level);
-        drawScore();
-        draw();
-    }
-
-    function fullReset() {
-        score = 0;
-        level = 1;
-        messageContainer.classList.add('hidden');
-        startLevel();
-    }
-    
-    // --- Início do Jogo ---
-    fullReset();
-
-    // Redefinição de funções para não serem redeclaradas
-    drawBall = function() { ctx.beginPath(); ctx.arc(x, y, ballRadius, 0, Math.PI*2); ctx.fillStyle = "#63b3ed"; ctx.fill(); ctx.closePath(); }
-    drawPaddle = function() { ctx.beginPath(); ctx.fillStyle = "#93c5fd"; ctx.roundRect(paddleX, canvas.height - paddleHeight, paddleWidth, paddleHeight, 10 * scale); ctx.fill(); ctx.closePath(); }
-    handleMove = function(e) { if (!audioStarted) { Tone.start(); audioStarted = true; } const rect = canvas.getBoundingClientRect(); let clientX = e.clientX; if (e.touches && e.touches.length > 0) { clientX = e.touches[0].clientX; } const relativeX = clientX - rect.left; const newPaddleX = relativeX - paddleWidth / 2; if (newPaddleX > 0 && newPaddleX < canvas.width - paddleWidth) { paddleX = newPaddleX; } }
-</script>
+            // --- INICIALIZAÇÃO DO JOGO --- //
+            if (!loadGame()) {
+                ui.nicknameOverlay.classList.add('visible');
+            }
+        };
+    </script>
 </body>
 </html>
