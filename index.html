@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="pt-br">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Breakout Deluxe</title>
+    <title>Breakout Deluxe 2.0</title>
     <!-- Carrega a biblioteca Tone.js para o áudio -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     <style>
@@ -13,6 +14,10 @@
             --secondary-color: #16213e;
             --font-color: #f0f0f0;
             --glow-color: rgba(233, 69, 96, 0.7);
+            --powerup-life-color: #ff718e;
+            --powerup-floor-color: #16e0bd;
+            --powerup-paddle-color: #00f5d4;
+            --damage-color: #1a1a2e;
         }
 
         /* Estilização geral e reset */
@@ -22,7 +27,8 @@
             padding: 0;
         }
 
-        html, body {
+        html,
+        body {
             width: 100%;
             height: 100%;
             overflow: hidden;
@@ -47,6 +53,8 @@
             border-radius: 8px;
             overflow: hidden;
             position: relative;
+            /* Adicionado para o efeito de shake */
+            transition: transform 0.1s ease-in-out;
         }
 
         /* Barra de informações (UI) */
@@ -59,15 +67,21 @@
             font-size: 1em;
             font-weight: bold;
             border-bottom: 2px solid var(--primary-color);
+            flex-wrap: wrap;
         }
 
         #uiBar span {
-            min-width: 100px;
+            min-width: 90px;
             text-align: center;
+            padding: 2px 5px;
         }
         
         #timerDisplay {
             color: #ffdd00;
+        }
+        
+        #livesDisplay {
+            color: #ff718e;
         }
 
         /* Canvas do jogo */
@@ -75,9 +89,10 @@
             display: block;
             width: 100%;
             background-color: #0f3460;
-            cursor: none; /* O cursor é escondido para não interferir com a raquete */
+            cursor: none;
+            /* O cursor é escondido para não interferir com a raquete */
         }
-        
+
         /* Controles do jogo */
         #gameControls {
             padding: 10px;
@@ -100,11 +115,12 @@
             transform: translateY(-4px);
         }
 
-        button:hover, button:focus {
+        button:hover,
+        button:focus {
             background-color: #ff718e;
             outline: none;
         }
-        
+
         button:active {
             transform: translateY(0);
             box-shadow: none;
@@ -132,7 +148,7 @@
             visibility: visible;
             opacity: 1;
         }
-        
+
         .overlay-content {
             background-color: var(--secondary-color);
             padding: 30px;
@@ -147,7 +163,7 @@
             color: var(--primary-color);
             font-size: 2em;
         }
-        
+
         .overlay-content p {
             margin-bottom: 25px;
             font-size: 1.2em;
@@ -164,20 +180,27 @@
             font-family: 'Courier New', Courier, monospace;
             text-align: center;
             font-size: 1.1em;
+            transition: box-shadow 0.2s;
         }
-        
+
+        /* Efeito de erro no input */
+        .overlay-content input.error {
+            box-shadow: 0 0 10px #ff0000;
+        }
+
         /* Responsividade */
         @media (max-width: 600px) {
             #uiBar {
                 font-size: 0.8em;
                 padding: 8px 10px;
+                justify-content: center;
             }
-            #uiBar span {
-                min-width: 80px;
-            }
+            .overlay-content h2 { font-size: 1.5em; }
+            .overlay-content p { font-size: 1em; }
         }
     </style>
 </head>
+
 <body>
 
     <div id="gameContainer">
@@ -185,12 +208,13 @@
         <div id="uiBar">
             <span id="scoreDisplay">Pontuação: 0</span>
             <span id="levelDisplay">Nível: 1</span>
+            <span id="livesDisplay">Vidas: 3</span>
             <span id="timerDisplay"></span>
         </div>
-        
+
         <!-- Canvas onde o jogo é renderizado -->
         <canvas id="gameCanvas"></canvas>
-        
+
         <!-- Controles do Jogo (botão de pausa) -->
         <div id="gameControls">
             <button id="pauseButton">Pausar</button>
@@ -198,8 +222,8 @@
 
         <!-- Overlay para mensagens de Nickname -->
         <div id="nicknameOverlay" class="overlay visible">
-             <div class="overlay-content">
-                <h2>Bem-vindo ao Breakout Deluxe!</h2>
+            <div class="overlay-content">
+                <h2>Bem-vindo ao Breakout Deluxe 2.0!</h2>
                 <p>Por favor, insira o seu nickname para começar:</p>
                 <input type="text" id="nicknameInput" maxlength="15" placeholder="Seu Nickname">
                 <button id="startGameButton">Iniciar Jogo</button>
@@ -219,16 +243,27 @@
     <script>
         // Aguarda o carregamento completo da página para iniciar o jogo
         window.onload = function() {
-            
+
             // --- VARIÁVEIS E CONSTANTES GLOBAIS --- //
 
             const canvas = document.getElementById('gameCanvas');
             const ctx = canvas.getContext('2d');
+            const gameContainer = document.getElementById('gameContainer');
+
+            // Cores obtidas do CSS para uso no JavaScript
+            const colors = {
+                paddle: getComputedStyle(document.documentElement).getPropertyValue('--powerup-paddle-color').trim(),
+                floor: getComputedStyle(document.documentElement).getPropertyValue('--powerup-floor-color').trim(),
+                life: getComputedStyle(document.documentElement).getPropertyValue('--powerup-life-color').trim(),
+                damage: getComputedStyle(document.documentElement).getPropertyValue('--damage-color').trim(),
+                defaultPaddle: '#16e0bd'
+            };
 
             // Elementos da UI
             const ui = {
                 scoreDisplay: document.getElementById('scoreDisplay'),
                 levelDisplay: document.getElementById('levelDisplay'),
+                livesDisplay: document.getElementById('livesDisplay'),
                 timerDisplay: document.getElementById('timerDisplay'),
                 pauseButton: document.getElementById('pauseButton'),
                 nicknameOverlay: document.getElementById('nicknameOverlay'),
@@ -248,299 +283,300 @@
                 nickname: '',
                 score: 0,
                 level: 1,
+                lives: 3,
                 timer: null,
                 timerId: null,
                 animationFrameId: null,
-                audioStarted: false
+                audioInitialized: false, // Flag para controlar o estado do áudio
+                screenShake: { active: false, magnitude: 0, duration: 0 },
+                floorShield: { active: false, timer: 0 },
+                largePaddle: { active: false }, // Removido o timer daqui
             };
 
             // Configurações do Jogo
             const config = {
-                brickRowCount: 10,
-                brickColumnCount: 8,
                 paddleHeight: 15,
                 paddleWidth: 120,
                 ballRadius: 10,
                 baseBallSpeed: 4,
-                maxLevels: 15
+                maxLevels: 15,
+                powerUpDropChance: 0.3, 
+                powerUpSpeed: 2
             };
 
-            // --- OBJETOS DO JOGO (RAQUETE, BOLA, BLOCOS) --- //
-            
-            let paddle = {
-                x: 0,
-                y: 0,
-                width: config.paddleWidth,
-                height: config.paddleHeight,
-                dx: 0, // Velocidade horizontal da raquete para o efeito de "corte"
-                lastX: 0
-            };
+            // --- OBJETOS DO JOGO --- //
 
+            let paddle = { x: 0, y: 0, width: config.paddleWidth, height: config.paddleHeight, dx: 0, lastX: 0 };
             let balls = [];
             let bricks = [];
             let particles = [];
+            let powerUps = []; 
+            let sounds; 
 
             // --- DEFINIÇÃO DOS NÍVEIS --- //
-            // 0: Vazio, 1: Normal, 2: Resistente, 'E': Explosivo, 'M': Multi-bolas
+            // V: Bloco de Veneno (Poison)
             const levelLayouts = [
-                // Nível 1
-                [[1,1,1,1,1,1,1,1], [1,1,1,1,1,1,1,1], [1,1,0,0,0,0,1,1], [1,1,0,0,0,0,1,1]],
-                // Nível 2
-                [[0,1,1,1,1,1,1,0], [1,1,1,1,1,1,1,1], [1,1,2,1,1,2,1,1], [1,1,1,'E','E',1,1,1], [0,1,1,1,1,1,1,0]],
-                // Nível 3
-                [[2,2,2,2,2,2,2,2], [2,1,1,1,1,1,1,2], [1,1,'E',0,0,'E',1,1], [1,0,1,0,0,1,0,1], [1,0,1,1,1,1,0,1]],
-                // Nível 4
-                [[1,1,'M',1,1,'M',1,1], [1,2,1,2,1,2,1,2], [2,1,2,1,2,1,2,1], [0,1,1,1,1,1,1,0], [0,0,'E',2,2,'E',0,0]],
-                // Nível 5
-                [[0,0,1,1,1,1,0,0], [0,1,2,2,2,2,1,0], [1,2,1,'E','E',1,2,1], [1,2,1,'M','M',1,2,1], [0,1,2,2,2,2,1,0], [0,0,1,1,1,1,0,0]],
-                // Nível 6
-                [[2,2,2,0,0,2,2,2], [2,0,2,0,0,2,0,2], [2,0,2,0,0,2,0,2], [2,2,2,'M','M',2,2,2]],
-                // Nível 7
-                [['E',1,1,1,1,1,1,'E'], [1,2,0,0,0,0,2,1], [1,0,2,0,0,2,0,1], [1,0,0,'M','M',0,0,1], [1,0,2,0,0,2,0,1], [1,2,0,0,0,0,2,1], ['E',1,1,1,1,1,1,'E']],
-                // Nível 8
-                [[1,2,1,2,1,2,1,2], [2,1,2,1,2,1,2,1], [0,0,0,0,0,0,0,0], [1,'E',1,'M','M',1,'E',1], [0,0,0,0,0,0,0,0], [2,1,2,1,2,1,2,1], [1,2,1,2,1,2,1,2]],
-                // Nível 9
-                [[2,2,2,2,2,2,2,2], [0,0,0,'E','E',0,0,0], [2,2,2,2,2,2,2,2], [0,0,0,'M','M',0,0,0], [2,2,2,2,2,2,2,2]],
-                // Nível 10
-                [[1,1,0,1,1,0,1,1], [1,1,1,1,1,1,1,1], [1,1,2,'E','E',2,1,1], [1,1,1,'M','M',1,1,1], [1,1,1,1,1,1,1,1], [0,1,1,1,1,1,1,0]],
-                // Nível 11
-                [[0,0,2,'E','E',2,0,0], [0,2,1,2,2,1,2,0], [2,1,2,1,1,2,1,2], [1,2,1,'M','M',1,2,1], [2,1,2,1,1,2,1,2], [0,2,1,2,2,1,2,0], [0,0,2,'E','E',2,0,0]],
-                // Nível 12
-                [[2,1,2,1,1,2,1,2], [1,'E',1,0,0,1,'E',1], [2,1,2,'M','M',2,1,2], [1,0,1,2,2,1,0,1], [2,1,2,0,0,2,1,2], [1,2,1,'E','E',1,2,1]],
-                // Nível 13
-                [[1,1,1,1,1,1,1,1], ['E',2,'E',2,'E',2,'E',2], [1,1,1,1,1,1,1,1], [2,'M',2,'M',2,'M',2,'M'], [1,1,1,1,1,1,1,1]],
-                // Nível 14
-                [[2,2,0,'E','E',0,2,2], [2,1,2,'M','M',2,1,2], [0,2,1,2,2,1,2,0], ['E',1,2,1,1,2,1,'E'], ['M',2,1,2,2,1,2,'M'], [0,1,2,0,0,2,1,0], [2,1,0,2,2,0,1,2]],
-                // Nível 15
-                [['E',2,1,'M','M',1,2,'E'], [2,1,2,1,1,2,1,2], [1,2,1,2,2,1,2,1], ['M',1,2,'E','E',2,1,'M'], [1,2,1,2,2,1,2,1], [2,1,2,1,1,2,1,2], ['E',2,1,'M','M',1,2,'E']]
+                [[1,1,1,1,1,1,1,1], [1,1,1,1,1,1,1,1], [1,1,0,0,0,0,1,1], [1,1,0,'L', 'L',0,1,1]],
+                [[0,1,1,1,1,1,1,0], [1,1,1,1,1,1,1,1], [1,1,2,1,1,2,1,1], [1,'V',1,'E','E',1,'V',1], [0,1,1,1,1,1,1,0]],
+                [[2,2,2,2,2,2,2,2], [2,1,1,'X', 'X',1,1,2], [1,1,'E',0,0,'E',1,1], ['I',0,'V',0,0,'V',0,'I'], [1,0,1,1,1,1,0,1]],
+                [[1,1,'M',1,1,'M',1,1], [1,2,1,2,1,2,1,2], [2,1,2,1,2,1,2,1], [0,1,'F',1,1,'F',1,0], [0,0,'E',2,2,'E',0,0]],
+                [['V',0,1,1,1,1,0,'V'], [0,1,2,2,2,2,1,0], [1,2,'I','E','E','I',2,1], [1,2,1,'M','M',1,2,1], [0,1,2,2,2,2,1,0], [0,0,'L',1,1,'L',0,0]],
+                [[2,2,2,0,0,2,2,2], [2,'I',2,0,0,2,'I',2], ['F',0,2,0,0,2,0,'F'], [2,2,'V','M','M','V',2,2]],
+                [['E',1,1,1,1,1,1,'E'], [1,2,0,'X',0,'X',2,1], [1,0,2,0,0,2,0,1], [1,'I','V','M','M','V','I',1], [1,0,2,0,0,2,0,1], [1,2,0,0,0,0,2,1], ['E',1,1,'L', 'L',1,1,'E']],
+                [[1,2,1,2,1,2,1,2], [2,1,2,1,2,1,2,1], [0,0,0,0,0,0,0,0], [1,'E','I','M','M','I','E',1], [0,0,0,0,0,0,0,0], [2,1,2,1,2,1,2,1], [1,2,1,2,1,2,1,2]],
+                [[2,2,2,2,2,2,2,2], ['I','I',0,'E','E',0,'I','I'], [2,2,'V',2,2,'V',2,2], [0,0,0,'M','M',0,0,0], [2,2,2,'F','F',2,2,2]],
+                [[1,1,0,1,1,0,1,1], [1,1,1,1,1,1,1,1], [1,1,2,'E','E',2,1,1], [1,'I',1,'M','M',1,'I',1], [1,1,1,'X', 'X',1,1,1], [0,1,'V',1,1,'V',1,0]],
+                [[0,0,2,'E','E',2,0,0], [0,2,'I',2,2,'I',2,0], [2,1,2,1,1,2,1,2], ['L',2,'V','M','M','V',2,'L'], [2,1,2,1,1,2,1,2], [0,2,'I',2,2,'I',2,0], [0,0,2,'F','F',2,0,0]],
+                [[2,1,2,1,1,2,1,2], [1,'E','I',0,0,'I','E',1], [2,1,2,'M','M',2,1,2], ['I',0,1,2,2,1,0,'I'], [2,'V',2,0,0,2,'V',2], [1,2,1,'E','E',1,2,1]],
+                [['I',1,'I',1,'I',1,'I',1], ['E',2,'E',2,'E',2,'E',2], [1,'X',1,1,1,1,'X',1], [2,'M',2,'M',2,'M',2,'M'], ['I',1,'V','F','F','V',1,'I']],
+                [[2,2,0,'E','E',0,2,2], [2,1,2,'M','M',2,1,2], [0,2,1,2,2,1,2,0], ['E','I',2,1,1,2,'I','E'], ['M',2,1,2,2,1,2,'M'], [0,1,2,'L','L',2,1,0], [2,1,0,'V','V',0,1,2]],
+                [['E',2,'I','M','M','I',2,'E'], [2,1,2,1,1,2,1,2], [1,2,'L','E','E','L',2,1], ['M','I','V',2,2,'V','I','M'], [1,2,'F',1,1,'F',2,1], [2,1,2,1,1,2,1,2], ['E',2,'I','M','M','I',2,'E']]
             ];
+            
+            // --- FUNÇÕES DE ÁUDIO --- //
 
-            // --- CONFIGURAÇÃO DE ÁUDIO (TONE.JS) --- //
-            let sounds;
             function setupAudio() {
                 sounds = {
-                    paddleHit: new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 0.1 } }).toDestination(),
-                    wallHit: new Tone.MembraneSynth({ pitchDecay: 0.01, octaves: 2, envelope: { attack: 0.001, decay: 0.2, sustain: 0 } }).toDestination(),
-                    brickBreak: new Tone.Player("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA").toDestination(), // Som de "click" curto
-                    explosion: new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.005, decay: 0.3, sustain: 0 } }).toDestination(),
+                    paddleHit: new Tone.PolySynth(Tone.Synth, { oscillator: { type: "sine" }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 0.1 } }).toDestination(),
+                    wallHit: new Tone.PolySynth(Tone.MembraneSynth, { pitchDecay: 0.01, octaves: 2, envelope: { attack: 0.001, decay: 0.2, sustain: 0 } }).toDestination(),
+                    brickBreak: new Tone.PolySynth(Tone.MembraneSynth, { pitchDecay: 0.008, octaves: 10, envelope: { attack: 0.001, decay: 0.15, sustain: 0 } }).toDestination(),
+                    explosion: new Tone.PolySynth(Tone.NoiseSynth, { noise: { type: 'white' }, envelope: { attack: 0.005, decay: 0.3, sustain: 0 } }).toDestination(),
                     multiBall: new Tone.PluckSynth({ attackNoise: 1, dampening: 4000, resonance: 0.7 }).toDestination(),
                     levelComplete: new Tone.Synth({ oscillator: { type: "triangle" }, envelope: { attack: 0.05, decay: 0.2, sustain: 0.5, release: 0.8 } }).toDestination(),
                     gameOver: new Tone.Synth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.01, decay: 0.5, sustain: 0.1, release: 1 } }).toDestination(),
+                    powerUp: new Tone.Synth({ oscillator: { type: 'pulse', width: 0.6 }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.3 }}).toDestination(),
+                    loseLife: new Tone.Synth({ oscillator: { type: 'fmsquare' }, envelope: { attack: 0.01, decay: 0.4, sustain: 0, release: 0.4 }}).toDestination()
                 };
                 sounds.brickBreak.volume.value = -10;
-                sounds.wallHit.volume.value = -10;
+                sounds.wallHit.volume.value = -12;
+            }
+
+            function initAudio() {
+                if (gameState.audioInitialized) return;
+                gameState.audioInitialized = 'pending';
+                Tone.start().then(() => {
+                    console.log("Contexto de áudio iniciado.");
+                    setupAudio();
+                    gameState.audioInitialized = true;
+                }).catch(e => {
+                    console.error("Não foi possível iniciar o áudio, o jogo continuará sem som.", e);
+                    gameState.audioInitialized = true; 
+                });
+            }
+
+            // --- FUNÇÕES UTILITÁRIAS --- //
+
+            function hexToRgb(hex) {
+                let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : null;
+            }
+
+            function rgbToHex(r, g, b) {
+                return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).padStart(6, '0');
+            }
+
+            function mixColors(color1, color2, weight) {
+                const c1 = hexToRgb(color1);
+                const c2 = hexToRgb(color2);
+                if (!c1 || !c2) return color1;
+                const r = Math.round(c1.r * weight + c2.r * (1 - weight));
+                const g = Math.round(c1.g * weight + c2.g * (1 - weight));
+                const b = Math.round(c1.b * weight + c2.b * (1 - weight));
+                return rgbToHex(r, g, b);
             }
 
             // --- FUNÇÕES DO JOGO --- //
-
-            // Inicia o contexto de áudio após a primeira interação do usuário
-            function initAudio() {
-                if (!gameState.audioStarted) {
-                    Tone.start();
-                    setupAudio();
-                    gameState.audioStarted = true;
-                }
-            }
-
-            // Redimensiona o canvas para preencher o container
-            function resizeCanvas() {
+            
+            function resizeAndRecalculate() {
                 const containerWidth = canvas.parentElement.clientWidth;
                 canvas.width = containerWidth;
-                canvas.height = containerWidth * 1; // Proporção 1:1
+                canvas.height = containerWidth * 1; 
                 paddle.y = canvas.height - paddle.height - 20;
+                if (bricks.length > 0) createBricks(true); 
             }
 
-            // Cria os blocos para o nível atual
-            function createBricks() {
+            function createBricks(keepState = false) {
+                const oldBricks = keepState ? [...bricks] : [];
                 bricks = [];
                 const layout = levelLayouts[gameState.level - 1];
-                if (!layout) {
-                    // Se não houver mais níveis, o jogador venceu
-                    winGame();
-                    return;
-                }
+                if (!layout) { winGame(); return; }
 
                 const brickPadding = 5;
                 const brickOffsetTop = 30;
                 const brickOffsetLeft = 20;
                 const brickHeight = 25;
-                
-                // Cálculo da largura do bloco corrigido para caber no canvas
+                const columnCount = layout[0].length;
                 const availableWidth = canvas.width - (brickOffsetLeft * 2);
-                const brickWidth = (availableWidth - (config.brickColumnCount - 1) * brickPadding) / config.brickColumnCount;
-
+                const brickWidth = (availableWidth - (columnCount - 1) * brickPadding) / columnCount;
 
                 layout.forEach((row, rowIndex) => {
                     row.forEach((brickType, colIndex) => {
                         if (brickType !== 0) {
-                            let health = 1;
-                            let color = '#e94560';
-                            let special = null;
-
-                            if (brickType === 2) { // Bloco resistente
-                                health = 2;
-                                color = '#a239ea';
-                            } else if (brickType === 'E') { // Bloco explosivo
-                                special = 'explosive';
-                                color = '#ff9a00';
-                            } else if (brickType === 'M') { // Bloco multi-bolas
-                                special = 'multiball';
-                                color = '#00f5d4';
+                            let health = 1, color = '#e94560', special = null, powerUpType = null;
+                            switch(brickType) {
+                                case 2: health = 2; color = '#a239ea'; break;
+                                case 'E': special = 'explosive'; color = '#ff9a00'; break;
+                                case 'M': special = 'multiball'; color = '#00f5d4'; break;
+                                case 'I': special = 'indestructible'; color = '#6c757d'; break;
+                                case 'L': powerUpType = 'largePaddle'; color = '#16e0bd'; break;
+                                case 'F': powerUpType = 'floorShield'; color = '#4cc9f0'; break;
+                                case 'X': powerUpType = 'extraLife'; color = '#f72585'; break;
+                                case 'V': special = 'poison'; color = '#7b2cbf'; break; // Bloco de Veneno
                             }
-
+                            const oldBrick = keepState ? oldBricks.find(b => b.rowIndex === rowIndex && b.colIndex === colIndex) : null;
                             bricks.push({
                                 x: colIndex * (brickWidth + brickPadding) + brickOffsetLeft,
                                 y: rowIndex * (brickHeight + brickPadding) + brickOffsetTop,
-                                width: brickWidth,
-                                height: brickHeight,
-                                health: health,
-                                baseColor: color,
-                                special: special,
-                                status: 1
+                                width: brickWidth, height: brickHeight,
+                                health: oldBrick ? oldBrick.health : health,
+                                baseColor: color, special, powerUpType,
+                                status: oldBrick ? oldBrick.status : 1,
+                                rowIndex, colIndex
                             });
                         }
                     });
                 });
             }
             
-            // Cria uma nova bola
             function createBall(x, y, vx, vy) {
-                return {
-                    x: x,
-                    y: y,
-                    vx: vx,
-                    vy: vy,
-                    speed: config.baseBallSpeed,
-                    radius: config.ballRadius,
-                    color: '#f0f0f0'
-                };
+                balls.push({ x, y, vx, vy, speed: config.baseBallSpeed, radius: config.ballRadius, color: '#f0f0f0', trail: [] });
             }
 
-            // Reseta a(s) bola(s) e a raquete
             function resetPaddleAndBall() {
                 balls = [];
+                // *** BUG FIX: Garante que o estado do poder da raquete grande é reiniciado ***
+                gameState.largePaddle.active = false;
+                paddle.width = config.paddleWidth;
                 paddle.x = (canvas.width - paddle.width) / 2;
-                const ball = createBall(canvas.width / 2, paddle.y - config.ballRadius - 5, 0, -config.baseBallSpeed);
-                balls.push(ball);
+                createBall(canvas.width / 2, paddle.y - config.ballRadius - 5, 0, -config.baseBallSpeed);
             }
 
-            // Detecção de colisão
+            function loseLife() {
+                gameState.lives--;
+                if (sounds) sounds.loseLife.triggerAttackRelease("A2", "0.5s", Tone.now());
+                if (gameState.lives <= 0) {
+                    endGame('Fim de Jogo!', `Você ficou sem vidas. Pontuação final: ${gameState.score}`, 'Jogar Novamente', () => loadLevel(1));
+                } else {
+                    showMessage('Vida Perdida!', `Você tem ${gameState.lives} vida(s) restante(s).`, 'Continuar', () => {
+                        gameState.paused = false;
+                        resetPaddleAndBall();
+                    });
+                    gameState.paused = true;
+                }
+            }
+
+            function endGame(title, text, buttonText, callback) {
+                gameState.gameOver = true;
+                if (sounds) sounds.gameOver.triggerAttackRelease("C2", "1s", Tone.now());
+                showMessage(title, text, buttonText, callback);
+                localStorage.removeItem('breakoutDeluxeSave');
+            }
+
             function collisionDetection() {
                 for (let i = balls.length - 1; i >= 0; i--) {
                     const ball = balls[i];
 
-                    // BUG FIX: Lógica de colisão com as paredes melhorada para evitar que a bola fique presa.
-                    // A posição da bola já foi atualizada no `update()`, então verificamos a posição atual.
-                    
-                    // Colisão com paredes laterais
-                    if (ball.x > canvas.width - ball.radius) {
-                        ball.x = canvas.width - ball.radius; // Reposiciona a bola para não ficar presa
-                        ball.vx = -ball.vx;                  // Inverte a direção
-                        if(gameState.audioStarted) sounds.wallHit.triggerAttackRelease("C2", "8n", Tone.now());
-                    } else if (ball.x < ball.radius) {
-                        ball.x = ball.radius;                // Reposiciona a bola
-                        ball.vx = -ball.vx;                  // Inverte a direção
-                        if(gameState.audioStarted) sounds.wallHit.triggerAttackRelease("C2", "8n", Tone.now());
+                    if (ball.x > canvas.width - ball.radius || ball.x < ball.radius) {
+                        ball.vx *= -1;
+                        ball.x = Math.max(ball.radius, Math.min(canvas.width - ball.radius, ball.x));
+                        if(sounds) sounds.wallHit.triggerAttackRelease("C3", "8n");
                     }
-
-                    // Colisão com parede superior
                     if (ball.y < ball.radius) {
-                        ball.y = ball.radius;                 // Reposiciona a bola
-                        ball.vy = -ball.vy;                   // Inverte a direção
-                        if(gameState.audioStarted) sounds.wallHit.triggerAttackRelease("C2", "8n", Tone.now());
+                        ball.vy *= -1;
+                        ball.y = ball.radius;
+                        if(sounds) sounds.wallHit.triggerAttackRelease("C3", "8n");
                     } 
-                    // Colisão com parede inferior (fim de jogo)
-                    else if (ball.y > canvas.height - ball.radius) {
-                        // A bola atingiu o fundo, não precisa reposicionar, apenas remover.
-                        balls.splice(i, 1); // Remove a bola
-                        if (balls.length === 0) {
-                            // Se for a última bola, perde o nível
-                            if(gameState.audioStarted) sounds.gameOver.triggerAttackRelease("C2", "0.5s", Tone.now());
-                            showMessage('Nível Falhou!', `Você perdeu todas as bolas. Pontuação: ${gameState.score}`, 'Tentar Novamente', () => {
-                                loadLevel(gameState.level);
-                            });
+                    else if (ball.y > canvas.height) {
+                        if (gameState.floorShield.active) {
+                            ball.vy *= -1;
+                            ball.y = canvas.height - 1;
+                            if(sounds) sounds.powerUp.triggerAttackRelease("A3", "8n");
+                        } else {
+                            balls.splice(i, 1);
+                            if (balls.length === 0) loseLife();
                         }
-                        continue; // Pula para o resto da lógica desta bola, pois ela foi removida
+                        continue;
                     }
 
-
-                    // Colisão com a raquete
-                    if (ball.y > paddle.y - ball.radius && ball.y < paddle.y + paddle.height &&
-                        ball.x > paddle.x && ball.x < paddle.x + paddle.width) {
-                        
-                        // Detecta se a bola estava acima da raquete no frame anterior para evitar colisões laterais indesejadas
-                        if (ball.y - ball.vy <= paddle.y) {
-                            // Ponto de impacto na raquete (-1 a 1)
-                            let collidePoint = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
-                            
-                            // Ângulo de reflexão (max 60 graus)
-                            let angle = collidePoint * (Math.PI / 3);
-                            
-                            // Aumenta a velocidade da bola a cada rebatida
-                            ball.speed = Math.min(ball.speed + 0.1, config.baseBallSpeed * 2);
-
-                            ball.vx = ball.speed * Math.sin(angle);
-                            ball.vy = -ball.speed * Math.cos(angle);
-                            
-                            // Efeito de "corte" baseado no movimento da raquete
-                            ball.vx += paddle.dx * 0.3;
-
-                            if(gameState.audioStarted) sounds.paddleHit.triggerAttackRelease("C4", "8n", Tone.now());
-                        }
+                    if (ball.vy > 0 && ball.y > paddle.y - ball.radius && ball.y < paddle.y + paddle.height && ball.x > paddle.x && ball.x < paddle.x + paddle.width) {
+                        let collidePoint = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
+                        let angle = collidePoint * (Math.PI / 3);
+                        ball.speed = Math.min(ball.speed + 0.05, config.baseBallSpeed * 2.5);
+                        ball.vx = ball.speed * Math.sin(angle) + (paddle.dx * 0.3);
+                        ball.vy = -ball.speed * Math.cos(angle);
+                        ball.y = paddle.y - ball.radius;
+                        if(sounds) sounds.paddleHit.triggerAttackRelease("C4", "8n");
                     }
 
-                    // Colisão com os blocos
                     for (let j = bricks.length - 1; j >= 0; j--) {
                         const b = bricks[j];
-                        if (b.status === 1) {
-                            // Detecção de colisão AABB (Axis-Aligned Bounding Box)
-                            if (ball.x + ball.radius > b.x && 
-                                ball.x - ball.radius < b.x + b.width && 
-                                ball.y + ball.radius > b.y && 
-                                ball.y - ball.radius < b.y + b.height) {
-                                
-                                ball.vy = -ball.vy; // Resposta de colisão simples, mas eficaz
-                                b.health--;
+                        if (b.status === 1 && ball.x + ball.radius > b.x && ball.x - ball.radius < b.x + b.width && ball.y + ball.radius > b.y && ball.y - ball.radius < b.y + b.height) {
+                            
+                            const overlapX = (ball.radius + b.width / 2) - Math.abs(ball.x - (b.x + b.width / 2));
+                            const overlapY = (ball.radius + b.height / 2) - Math.abs(ball.y - (b.y + b.height / 2));
 
-                                if (b.health <= 0) {
-                                    b.status = 0;
-                                    gameState.score += 10;
-                                    if(gameState.audioStarted) sounds.brickBreak.stop().start(Tone.now());
-
-                                    // Lida com blocos especiais
-                                    if (b.special === 'explosive') {
-                                        explode(j);
-                                        if(gameState.audioStarted) sounds.explosion.triggerAttackRelease("0.3s", Tone.now());
-                                    }
-                                    if (b.special === 'multiball') {
-                                        activateMultiBall(b.x + b.width / 2, b.y + b.height / 2);
-                                        if(gameState.audioStarted) sounds.multiBall.triggerAttackRelease("G4", "0.5s", Tone.now());
-                                    }
-                                } else {
-                                    // Bloco resistente foi atingido mas não quebrado
-                                    if(gameState.audioStarted) sounds.wallHit.triggerAttackRelease("A3", "8n", Tone.now());
-                                }
-                                break; // Sai do loop de blocos para evitar múltiplas colisões em um frame
+                            if (overlapX >= overlapY) {
+                                ball.vy *= -1;
+                            } else {
+                                ball.vx *= -1;
                             }
+
+                            if (b.special === 'indestructible') {
+                                if(sounds) sounds.wallHit.triggerAttackRelease("G2", "8n");
+                                continue; 
+                            }
+                            
+                            b.health--;
+
+                            if (b.health <= 0) {
+                                b.status = 0;
+                                gameState.score += 10 * gameState.level;
+                                createParticles(b.x + b.width / 2, b.y + b.height / 2, 20, b.baseColor);
+                                
+                                if(sounds) sounds.brickBreak.triggerAttackRelease("C5", "16n");
+
+                                // *** BUG FIX: Lógica do veneno movida para aqui e simplificada ***
+                                if (b.special === 'poison') {
+                                    gameState.largePaddle.active = false;
+                                    paddle.width = config.paddleWidth;
+                                    if(sounds) sounds.loseLife.triggerAttackRelease("G2", "0.5s");
+                                }
+                                if (b.special === 'explosive') {
+                                    explode(j);
+                                    if(sounds) sounds.explosion.triggerAttackRelease("0.3s");
+                                    startScreenShake(10, 15);
+                                }
+                                if (b.special === 'multiball') {
+                                    activateMultiBall(b.x + b.width / 2, b.y + b.height / 2);
+                                    if(sounds) sounds.multiBall.triggerAttackRelease("G4", "0.5s");
+                                }
+                                if(b.powerUpType && Math.random() < config.powerUpDropChance) {
+                                    spawnPowerUp(b.x + b.width / 2, b.y + b.height / 2, b.powerUpType);
+                                }
+                            } else {
+                                if(sounds) sounds.wallHit.triggerAttackRelease("A3", "8n");
+                            }
+                            break; 
                         }
                     }
                 }
                 checkLevelComplete();
             }
             
-            // Verifica se todos os blocos quebráveis foram destruídos
             function checkLevelComplete() {
-                const breakableBricksLeft = bricks.filter(b => b.status === 1).length;
-                if (breakableBricksLeft === 0 && !gameState.levelComplete && !gameState.gameOver) {
+                const isLevelFinished = bricks.every(b => b.status === 0 || b.special === 'indestructible');
+                if (isLevelFinished && !gameState.levelComplete && !gameState.gameOver) {
                     gameState.levelComplete = true;
+                    gameState.score += 100 * gameState.level;
                     if (gameState.level >= config.maxLevels) {
                         winGame();
                     } else {
-                        if(gameState.audioStarted) sounds.levelComplete.triggerAttackRelease("C5", "0.5s", Tone.now());
-                        if(gameState.audioStarted) sounds.levelComplete.triggerAttackRelease("G5", "0.5s", Tone.now() + 0.2);
-                        if(gameState.audioStarted) sounds.levelComplete.triggerAttackRelease("C6", "0.5s", Tone.now() + 0.4);
-
-                        showMessage('Nível Completo!', `Pontuação: ${gameState.score}`, 'Próximo Nível', () => {
+                        if(sounds) {
+                             sounds.levelComplete.triggerAttackRelease("C5", "0.5s", Tone.now());
+                             sounds.levelComplete.triggerAttackRelease("G5", "0.5s", Tone.now() + 0.2);
+                             sounds.levelComplete.triggerAttackRelease("C6", "0.5s", Tone.now() + 0.4);
+                        }
+                        showMessage('Nível Completo!', `Bônus de +${100 * gameState.level} pontos! Pontuação: ${gameState.score}`, 'Próximo Nível', () => {
                             gameState.level++;
                             loadLevel(gameState.level);
                         });
@@ -550,72 +586,109 @@
             }
             
             function winGame() {
-                gameState.gameOver = true;
-                showMessage('Parabéns!', `Você completou todos os níveis! Pontuação final: ${gameState.score}`, 'Jogar Novamente', () => {
+                endGame('Parabéns!', `Você completou todos os níveos! Pontuação final: ${gameState.score}`, 'Jogar Novamente', () => {
+                    gameState.lives = 3;
                     loadLevel(1);
                 });
-                localStorage.removeItem('breakoutDeluxeSave');
             }
 
-
-            // Função para explosão
             function explode(brickIndex) {
                 const sourceBrick = bricks[brickIndex];
-                createParticles(sourceBrick.x + sourceBrick.width / 2, sourceBrick.y + sourceBrick.height / 2, 30, '#ff9a00');
-
                 bricks.forEach((b, i) => {
-                    if (b.status === 1 && i !== brickIndex) {
-                        // Verifica se o bloco 'b' está adjacente ao 'sourceBrick' (área 3x3 imaginária)
-                        const isAdjacent = Math.abs(b.x - sourceBrick.x) <= b.width + 5 && Math.abs(b.y - sourceBrick.y) <= b.height + 5;
-                        if (isAdjacent) {
+                    if (b.status === 1 && i !== brickIndex && b.special !== 'indestructible') {
+                        const dist = Math.sqrt(Math.pow(b.x - sourceBrick.x, 2) + Math.pow(b.y - sourceBrick.y, 2));
+                        if (dist < b.width * 1.5) {
                             b.status = 0;
-                            gameState.score += 10;
+                            gameState.score += 10 * gameState.level;
                             createParticles(b.x + b.width / 2, b.y + b.height / 2, 10, b.baseColor);
                         }
                     }
                 });
             }
 
-            // Função para multi-bolas
             function activateMultiBall(x, y) {
-                createParticles(x, y, 50, '#00f5d4');
-                for (let i = 0; i < 5; i++) {
-                    const angle = Math.random() * Math.PI * 2;
-                    const newBall = createBall(x, y, Math.cos(angle) * config.baseBallSpeed, Math.sin(angle) * config.baseBallSpeed);
-                    balls.push(newBall);
+                for (let i = 0; i < 2; i++) {
+                    const angle = (Math.random() - 0.5) * Math.PI;
+                    createBall(x, y, Math.cos(angle) * config.baseBallSpeed, -Math.abs(Math.sin(angle)) * config.baseBallSpeed);
                 }
             }
 
-            // Função para criar partículas
+            function spawnPowerUp(x, y, type) {
+                powerUps.push({ x, y, type, radius: 10 });
+            }
+
+            function updateAndDrawPowerUps() {
+                for (let i = powerUps.length - 1; i >= 0; i--) {
+                    const p = powerUps[i];
+                    p.y += config.powerUpSpeed;
+                    ctx.beginPath();
+                    let color = '#FFF', text = '?';
+                    switch(p.type) {
+                        case 'largePaddle': color = colors.paddle; text = 'W'; break;
+                        case 'floorShield': color = colors.floor; text = 'S'; break;
+                        case 'extraLife': color = colors.life; text = '+1'; break;
+                    }
+                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = color;
+                    ctx.fill();
+                    ctx.fillStyle = '#000';
+                    ctx.font = 'bold 12px Courier New';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(text, p.x, p.y + 1);
+                    if (p.y + p.radius > paddle.y && p.x > paddle.x && p.x < paddle.x + paddle.width) {
+                        activatePowerUp(p.type);
+                        powerUps.splice(i, 1);
+                        continue;
+                    }
+                    if (p.y - p.radius > canvas.height) powerUps.splice(i, 1);
+                }
+            }
+
+            function activatePowerUp(type) {
+                if(sounds) sounds.powerUp.triggerAttackRelease("C5", "0.2s");
+                switch(type) {
+                    case 'largePaddle':
+                        gameState.largePaddle.active = true;
+                        paddle.width = config.paddleWidth * 1.5;
+                        break;
+                    case 'floorShield':
+                        gameState.floorShield.active = true;
+                        gameState.floorShield.timer = 600; // Este continua com temporizador
+                        break;
+                    case 'extraLife':
+                        gameState.lives++;
+                        break;
+                }
+            }
+            
+            function handlePowerUpTimers() {
+                // Apenas o escudo tem temporizador agora
+                if (gameState.floorShield.active) {
+                    gameState.floorShield.timer--;
+                    if (gameState.floorShield.timer <= 0) gameState.floorShield.active = false;
+                }
+            }
+
             function createParticles(x, y, count, color) {
                 for (let i = 0; i < count; i++) {
-                    particles.push({
-                        x: x,
-                        y: y,
-                        vx: (Math.random() - 0.5) * 4,
-                        vy: (Math.random() - 0.5) * 4,
-                        radius: Math.random() * 2 + 1,
-                        lifespan: 100, // Frames
-                        color: color
-                    });
+                    particles.push({ x, y, vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5, radius: Math.random() * 2 + 1, lifespan: 80, color });
                 }
             }
 
-            // Atualiza e desenha as partículas
             function handleParticles() {
                 for (let i = particles.length - 1; i >= 0; i--) {
                     const p = particles[i];
                     p.x += p.vx;
                     p.y += p.vy;
+                    p.vy += 0.05;
                     p.lifespan--;
-
-                    if (p.lifespan <= 0) {
-                        particles.splice(i, 1);
-                    } else {
+                    if (p.lifespan <= 0) particles.splice(i, 1);
+                    else {
                         ctx.beginPath();
                         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                        ctx.globalAlpha = p.lifespan / 80;
                         ctx.fillStyle = p.color;
-                        ctx.globalAlpha = p.lifespan / 100;
                         ctx.fill();
                         ctx.closePath();
                     }
@@ -623,22 +696,46 @@
                 ctx.globalAlpha = 1.0;
             }
 
+            function startScreenShake(magnitude, duration) {
+                gameState.screenShake = { active: true, magnitude, duration };
+            }
 
-            // Funções de desenho no canvas
+            function applyScreenShake() {
+                if (gameState.screenShake.active) {
+                    const { magnitude } = gameState.screenShake;
+                    ctx.translate((Math.random() - 0.5) * magnitude, (Math.random() - 0.5) * magnitude);
+                    gameState.screenShake.duration--;
+                    if(gameState.screenShake.duration <= 0) gameState.screenShake.active = false;
+                }
+            }
+
+            // --- FUNÇÕES DE DESENHO --- //
+
             function drawPaddle() {
                 ctx.beginPath();
-                ctx.roundRect(paddle.x, paddle.y, paddle.width, paddle.height, 10);
-                ctx.fillStyle = '#16e0bd';
+                ctx.roundRect(paddle.x, paddle.y, paddle.width, paddle.height, [10]);
+                ctx.fillStyle = gameState.largePaddle.active ? colors.paddle : colors.defaultPaddle;
                 ctx.fill();
                 ctx.closePath();
             }
 
             function drawBalls() {
                 balls.forEach(ball => {
+                    ctx.globalAlpha = 0.3;
+                    ball.trail.forEach((pos, i) => {
+                        ctx.beginPath();
+                        ctx.arc(pos.x, pos.y, ball.radius * (i / ball.trail.length), 0, Math.PI * 2);
+                        ctx.fillStyle = ball.color;
+                        ctx.fill();
+                    });
+                    ctx.globalAlpha = 1.0;
                     ctx.beginPath();
                     ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
                     ctx.fillStyle = ball.color;
+                    ctx.shadowColor = '#fff';
+                    ctx.shadowBlur = 10;
                     ctx.fill();
+                    ctx.shadowBlur = 0;
                     ctx.closePath();
                 });
             }
@@ -648,64 +745,84 @@
                     if (b.status === 1) {
                         ctx.beginPath();
                         ctx.rect(b.x, b.y, b.width, b.height);
-                        if (b.health < 2) {
-                             ctx.fillStyle = b.baseColor;
+                        if (b.health < 2 && b.special !== 'indestructible') {
+                           ctx.fillStyle = b.baseColor;
                         } else {
-                             // Efeito de "dano" para blocos resistentes
-                             ctx.fillStyle = `color-mix(in srgb, ${b.baseColor} 50%, #1a1a2e)`;
+                           ctx.fillStyle = mixColors(b.baseColor, colors.damage, 0.5);
+                        }
+                        if (b.special === 'indestructible') {
+                            ctx.fillStyle = b.baseColor;
+                            ctx.strokeStyle = '#999';
+                            ctx.lineWidth = 2;
+                            ctx.stroke();
                         }
                         ctx.fill();
 
-                        // Adiciona a letra para blocos especiais
-                        if (b.special) {
+                        if (b.special || b.powerUpType) {
                             ctx.fillStyle = '#f0f0f0';
                             ctx.font = 'bold 16px Courier New';
                             ctx.textAlign = 'center';
                             ctx.textBaseline = 'middle';
-                            ctx.fillText(b.special.charAt(0).toUpperCase(), b.x + b.width / 2, b.y + b.height / 2);
+                            let text = '';
+                            if (b.special === 'poison') {
+                                text = '☠️'; // Emoji de caveira
+                            } else if (b.special) {
+                                text = b.special.charAt(0).toUpperCase();
+                            } else if (b.powerUpType) {
+                                text = b.powerUpType === 'extraLife' ? '+' : b.powerUpType.charAt(0).toUpperCase();
+                            }
+                            ctx.fillText(text, b.x + b.width / 2, b.y + b.height / 2 + 1);
                         }
                         ctx.closePath();
                     }
                 });
             }
 
-            // Atualiza a UI
-            function updateUI() {
-                ui.scoreDisplay.textContent = `Pontuação: ${gameState.score}`;
-                ui.levelDisplay.textContent = `Nível: ${gameState.nickname ? gameState.nickname + ' - ' : ''}${gameState.level}`;
-                if (gameState.timer !== null) {
-                    ui.timerDisplay.textContent = `Tempo: ${Math.ceil(gameState.timer)}`;
-                    ui.timerDisplay.style.visibility = 'visible';
-                } else {
-                    ui.timerDisplay.style.visibility = 'hidden';
+            function drawFloorShield() {
+                if (gameState.floorShield.active) {
+                    ctx.beginPath();
+                    ctx.rect(0, canvas.height - 5, canvas.width, 5);
+                    ctx.fillStyle = colors.floor;
+                    ctx.globalAlpha = 0.5 + Math.sin(Date.now() / 200) * 0.2;
+                    ctx.fill();
+                    ctx.globalAlpha = 1.0;
                 }
             }
 
-            // Função principal de desenho
+            function updateUI() {
+                ui.scoreDisplay.textContent = `Pontuação: ${gameState.score}`;
+                ui.levelDisplay.textContent = `${gameState.nickname} - Nível ${gameState.level}`;
+                ui.livesDisplay.textContent = `Vidas: ${gameState.lives}`;
+                ui.timerDisplay.style.visibility = gameState.timer !== null ? 'visible' : 'hidden';
+                if(gameState.timer !== null) ui.timerDisplay.textContent = `Tempo: ${Math.ceil(gameState.timer)}`;
+            }
+            
             function draw() {
+                ctx.save();
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+                applyScreenShake();
                 drawBricks();
                 drawPaddle();
+                updateAndDrawPowerUps();
                 drawBalls();
                 handleParticles();
+                drawFloorShield();
+                ctx.restore();
             }
-
-            // Função principal de atualização da lógica
+            
             function update() {
-                // Atualiza a posição da(s) bola(s)
+                paddle.dx = paddle.x - paddle.lastX;
+                paddle.lastX = paddle.x;
                 balls.forEach(ball => {
+                    ball.trail.push({ x: ball.x, y: ball.y });
+                    if (ball.trail.length > 5) ball.trail.shift();
                     ball.x += ball.vx;
                     ball.y += ball.vy;
                 });
-                
-                // Atualiza a velocidade da raquete para o efeito de "corte"
-                paddle.dx = paddle.x - paddle.lastX;
-                paddle.lastX = paddle.x;
-
                 collisionDetection();
+                handlePowerUpTimers();
             }
             
-            // Loop principal do jogo
             function gameLoop() {
                 if (!gameState.paused && !gameState.gameOver && !gameState.levelComplete) {
                     update();
@@ -715,14 +832,13 @@
                 gameState.animationFrameId = requestAnimationFrame(gameLoop);
             }
 
-            // Gerenciamento de persistência (localStorage)
             function saveGame() {
-                const saveData = {
+                localStorage.setItem('breakoutDeluxeSave', JSON.stringify({
                     nickname: gameState.nickname,
                     score: gameState.score,
-                    level: gameState.level
-                };
-                localStorage.setItem('breakoutDeluxeSave', JSON.stringify(saveData));
+                    level: gameState.level,
+                    lives: gameState.lives
+                }));
             }
 
             function loadGame() {
@@ -732,31 +848,26 @@
                     gameState.nickname = data.nickname;
                     gameState.score = data.score;
                     gameState.level = data.level;
+                    gameState.lives = data.lives;
                     ui.nicknameOverlay.classList.remove('visible');
+                    initAudio(); // Inicia o áudio ao carregar o jogo
                     loadLevel(gameState.level);
                     return true;
                 }
                 return false;
             }
 
-            // Gerenciador do temporizador
             function startTimer() {
                 if (gameState.timerId) clearInterval(gameState.timerId);
-
-                if (gameState.level >= 3) {
-                    const breakableBricks = bricks.filter(b => b.status === 1).length;
-                    gameState.timer = 40 + breakableBricks; // 40s base + 1s por bloco
-
+                if (gameState.level >= 5) {
+                    const breakableBricks = bricks.filter(b => b.status === 1 && b.special !== 'indestructible').length;
+                    gameState.timer = 30 + breakableBricks;
                     gameState.timerId = setInterval(() => {
                         if (!gameState.paused && !gameState.gameOver && !gameState.levelComplete) {
                             gameState.timer--;
                             if (gameState.timer <= 0) {
                                 clearInterval(gameState.timerId);
-                                gameState.gameOver = true;
-                                if(gameState.audioStarted) sounds.gameOver.triggerAttackRelease("A2", "0.8s", Tone.now());
-                                showMessage('Tempo Esgotado!', `Sua pontuação foi ${gameState.score}`, 'Tentar Novamente', () => {
-                                    loadLevel(gameState.level);
-                                });
+                                endGame('Tempo Esgotado!', `Sua pontuação foi ${gameState.score}`, 'Tentar Novamente', () => loadLevel(gameState.level));
                             }
                         }
                     }, 1000);
@@ -765,72 +876,72 @@
                 }
             }
 
-            // Mostra mensagens na tela
             function showMessage(title, text, buttonText, callback) {
                 if (gameState.timerId) clearInterval(gameState.timerId);
-                
                 ui.messageTitle.textContent = title;
                 ui.messageText.textContent = text;
                 ui.messageButton.textContent = buttonText;
-                
-                // Remove o listener antigo para evitar múltiplos cliques
                 const newButton = ui.messageButton.cloneNode(true);
                 ui.messageButton.parentNode.replaceChild(newButton, ui.messageButton);
                 ui.messageButton = newButton;
-                
                 ui.messageButton.onclick = () => {
                     ui.messageOverlay.classList.remove('visible');
+                    initAudio(); // Garante que o áudio é iniciado após interação na mensagem
                     callback();
                 };
                 ui.messageOverlay.classList.add('visible');
             }
             
-            // Carrega um nível
             function loadLevel(level) {
                 gameState.gameOver = false;
                 gameState.levelComplete = false;
                 gameState.paused = false;
-                if(level === 1) gameState.score = 0; // Reseta a pontuação se voltar para o nível 1
-
+                if(level === 1 && !localStorage.getItem('breakoutDeluxeSave')) {
+                    gameState.score = 0;
+                    gameState.lives = 3;
+                }
                 gameState.level = level;
+                powerUps = [];
+                gameState.floorShield = { active: false, timer: 0 };
                 
-                resizeCanvas();
-                createBricks();
+                // Redefine a raquete ao carregar o nível
+                gameState.largePaddle.active = false;
+                paddle.width = config.paddleWidth;
+
+
+                const containerWidth = canvas.parentElement.clientWidth;
+                canvas.width = containerWidth;
+                canvas.height = containerWidth * 1; 
+                paddle.y = canvas.height - paddle.height - 20;
+                createBricks(false); 
+
                 resetPaddleAndBall();
                 startTimer();
-                
-                // Reinicia o loop do jogo se ele não estiver rodando
-                if (!gameState.animationFrameId) {
-                    gameLoop();
-                }
+                if (!gameState.animationFrameId) gameLoop();
             }
 
             // --- EVENT LISTENERS --- //
 
             function handleMouseMove(e) {
-                const relativeX = e.clientX - canvas.getBoundingClientRect().left;
-                if (relativeX > 0 && relativeX < canvas.width) {
-                    paddle.x = Math.max(0, Math.min(relativeX - paddle.width / 2, canvas.width - paddle.width));
-                }
+                const rect = canvas.getBoundingClientRect();
+                const relativeX = (e.clientX - rect.left) * (canvas.width / rect.width);
+                paddle.x = Math.max(0, Math.min(relativeX - paddle.width / 2, canvas.width - paddle.width));
             }
 
             function handleTouchMove(e) {
                 e.preventDefault();
                 if (e.touches.length > 0) {
-                    const touch = e.touches[0];
-                    const relativeX = touch.clientX - canvas.getBoundingClientRect().left;
-                    if (relativeX > 0 && relativeX < canvas.width) {
-                        paddle.x = Math.max(0, Math.min(relativeX - paddle.width / 2, canvas.width - paddle.width));
-                    }
+                    const rect = canvas.getBoundingClientRect();
+                    const relativeX = (e.touches[0].clientX - rect.left) * (canvas.width / rect.width);
+                    paddle.x = Math.max(0, Math.min(relativeX - paddle.width / 2, canvas.width - paddle.width));
                 }
             }
             
-            // Pausar/Retomar
             function togglePause() {
+                if(gameState.gameOver || gameState.levelComplete) return;
                 initAudio();
                 gameState.paused = !gameState.paused;
                 ui.pauseButton.textContent = gameState.paused ? 'Retomar' : 'Pausar';
-                
                 if (gameState.paused) {
                     showMessage('Pausado', '', 'Retomar', togglePause);
                 } else {
@@ -840,11 +951,7 @@
 
             document.addEventListener('mousemove', handleMouseMove);
             canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
-            window.addEventListener('resize', () => {
-                resizeCanvas();
-                createBricks(); // Recria os blocos para se ajustarem ao novo tamanho
-            });
-
+            window.addEventListener('resize', resizeAndRecalculate);
             ui.pauseButton.addEventListener('click', togglePause);
             
             ui.startGameButton.addEventListener('click', () => {
@@ -856,7 +963,8 @@
                     saveGame();
                     loadLevel(1);
                 } else {
-                    alert('Por favor, insira um nickname.');
+                    ui.nicknameInput.classList.add('error');
+                    setTimeout(() => ui.nicknameInput.classList.remove('error'), 500);
                 }
             });
 
@@ -867,4 +975,5 @@
         };
     </script>
 </body>
+
 </html>
